@@ -1,0 +1,1 @@
+ALTER TABLE public.deposits ADD COLUMN reject_reason text;

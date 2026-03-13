@@ -1,0 +1,1 @@
+ALTER TABLE public.game_profit_settings ADD COLUMN loss_rate numeric NOT NULL DEFAULT 85;

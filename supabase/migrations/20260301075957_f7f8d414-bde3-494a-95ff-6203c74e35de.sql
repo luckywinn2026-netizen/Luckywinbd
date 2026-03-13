@@ -1,0 +1,1 @@
+ALTER TABLE public.agent_applications ADD COLUMN whatsapp text;

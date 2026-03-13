@@ -1,0 +1,2 @@
+ALTER TABLE public.game_assets DROP CONSTRAINT game_assets_asset_type_check;
+ALTER TABLE public.game_assets ADD CONSTRAINT game_assets_asset_type_check CHECK (asset_type IN ('symbol', 'background', 'music', 'mascot'));

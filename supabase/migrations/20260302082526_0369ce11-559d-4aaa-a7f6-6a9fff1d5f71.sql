@@ -1,0 +1,1 @@
+ALTER TABLE public.games ADD COLUMN popular boolean NOT NULL DEFAULT false;

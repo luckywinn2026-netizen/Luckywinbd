@@ -1,0 +1,19 @@
+project_id = "suofmcbqjeuptnvesygt"
+
+[functions.sports-data]
+verify_jwt = false
+
+[functions.game-outcome]
+verify_jwt = false
+
+[functions.boxing-king-spin]
+verify_jwt = false
+
+[functions.super-ace-spin]
+verify_jwt = false
+
+[functions.color-prediction-outcome]
+verify_jwt = false
+
+[functions.sync-game-stats]
+verify_jwt = false
