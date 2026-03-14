@@ -79,6 +79,7 @@ const AgentDepositsPage = () => {
       return;
     }
 
+    api.notifyAdminDepositApproved(deposit.id, deposit.amount).catch(() => {});
     toast.success(`✅ ৳${deposit.amount.toLocaleString()} Approved! Commission: ৳${Number(result.commission || 0).toLocaleString()}`);
     fetchDeposits();
   };

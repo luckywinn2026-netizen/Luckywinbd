@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import * as api from '@/lib/api';
 import { toast } from 'sonner';
 import { ShieldPlus, Trash2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,6 +35,8 @@ const AdminSubAdmins = () => {
   const [subAdmins, setSubAdmins] = useState<SubAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [creating, setCreating] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [savingModules, setSavingModules] = useState<string | null>(null);
 
@@ -64,18 +67,28 @@ const AdminSubAdmins = () => {
   useEffect(() => { fetchSubAdmins(); }, [fetchSubAdmins]);
 
   const addSubAdmin = async () => {
-    if (!phone.trim()) return;
-    const { data: profile } = await supabase.from('profiles').select('user_id').eq('phone', phone.trim()).single();
-    if (!profile) { toast.error('No user found with this phone number'); return; }
-    const { data: existing } = await supabase.from('user_roles').select('id').eq('user_id', profile.user_id).in('role', ['admin', 'moderator']);
-    if (existing && existing.length > 0) { toast.error('User is already admin/sub-admin'); return; }
-    const { error } = await supabase.from('user_roles').insert({ user_id: profile.user_id, role: 'moderator' });
-    if (error) { toast.error('Failed to add sub-admin'); return; }
-    // Add default modules (dashboard only)
-    await supabase.from('sub_admin_permissions').insert({ user_id: profile.user_id, module: '/admin/dashboard' });
-    toast.success('Sub-admin added! Select modules below.');
-    setPhone('');
-    fetchSubAdmins();
+    const p = phone.trim();
+    const pw = password.trim();
+    if (!p || !pw) {
+      toast.error('Phone number and password required');
+      return;
+    }
+    if (pw.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.adminCreateSubAdmin({ phone: p, password: pw });
+      toast.success('Sub-admin created! Login at admin panel with this phone and password.');
+      setPhone('');
+      setPassword('');
+      fetchSubAdmins();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to create sub-admin');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const removeSubAdmin = async (userId: string) => {
@@ -113,13 +126,20 @@ const AdminSubAdmins = () => {
         Select module access for each sub-admin individually
       </p>
 
-      <div className="flex gap-2">
-        <input type="text" value={phone} onChange={e => setPhone(e.target.value)}
-          placeholder="Add sub-admin by phone number..."
-          className="flex-1 bg-card gold-border rounded-lg px-3 py-2 text-sm font-body outline-none" />
-        <button onClick={addSubAdmin} className="px-4 py-2 rounded-lg gold-gradient font-heading font-bold text-sm text-primary-foreground">
-          <Plus size={16} />
-        </button>
+      <div className="bg-card rounded-xl gold-border p-4 space-y-3">
+        <p className="text-xs text-muted-foreground font-body">Create sub-admin with phone number and password. They can log in at admin panel with the same credentials.</p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+            placeholder="Phone (01XXXXXXXXX)"
+            className="flex-1 bg-secondary gold-border rounded-lg px-3 py-2 text-sm font-body outline-none" />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="Password (min 6 chars)"
+            className="flex-1 bg-secondary gold-border rounded-lg px-3 py-2 text-sm font-body outline-none" />
+          <button onClick={addSubAdmin} disabled={creating} className="px-4 py-2 rounded-lg gold-gradient font-heading font-bold text-sm text-primary-foreground disabled:opacity-50 flex items-center gap-2 shrink-0">
+            <Plus size={16} />
+            {creating ? 'Creating...' : 'Create Sub-Admin'}
+          </button>
+        </div>
       </div>
 
       {subAdmins.map(sa => (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { usePushRegistration } from '@/hooks/usePushRegistration';
 import {
   LayoutDashboard, Users, Wallet, ArrowDownCircle, ArrowUpCircle,
   Gamepad2, Settings, LogOut, Shield, BarChart3, Plane, Radio, Menu, X, UserPlus, Paintbrush, Dices, TrendingUp, MessageCircle, ShieldPlus, Banknote, Activity, HandCoins, Trophy, ClipboardList, Star, Gift, Phone, ImageIcon
@@ -43,9 +44,11 @@ const agentNavItems = [
 ];
 
 const AdminLayout = () => {
-  const { isAdmin, adminRole, allowedRoutes, loading } = useAdminAuth();
+  const { isAdmin, adminRole, allowedRoutes, loading, user } = useAdminAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  usePushRegistration(user?.id);
 
   useEffect(() => {
     if (!loading && !isAdmin) {

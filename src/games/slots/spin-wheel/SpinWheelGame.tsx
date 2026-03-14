@@ -110,6 +110,7 @@ const SpinWheelGame = () => {
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [coins, setCoins] = useState<{ id: number; x: number; delay: number; size: number; emoji: string }[]>([]);
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spinningRef = useRef(false);
 
   useEffect(() => {
     setDisplayBalance(balance);
@@ -147,10 +148,11 @@ const SpinWheelGame = () => {
   }, []);
 
   const spin = useCallback(async () => {
-    if (spinning || !user) return;
+    if (spinningRef.current || spinning || !user) return;
     if (betAmount < 0.5) { gameToast.error('Minimum bet ৳0.5'); return; }
     if (betAmount > balance) { gameToast.error('Insufficient balance!'); return; }
 
+    spinningRef.current = true;
     setSpinning(true);
     setResult(null);
     setWinAmount(0);
@@ -195,6 +197,7 @@ const SpinWheelGame = () => {
     } catch (e) {
       console.error('game-outcome fetch failed:', e);
       gameToast.error(e instanceof Error ? e.message : 'Spin failed');
+      spinningRef.current = false;
       setSpinning(false);
       if (tickTimerRef.current) clearInterval(tickTimerRef.current);
       return;
@@ -214,6 +217,7 @@ const SpinWheelGame = () => {
     setTimeout(() => {
       if (tickTimerRef.current) clearInterval(tickTimerRef.current);
       playLand();
+      spinningRef.current = false;
       setSpinning(false);
       setResult(seg);
       setWinAmount(actualWin);
@@ -567,7 +571,7 @@ const SpinWheelGame = () => {
             </div>
           </div>
           <div className="flex justify-center">
-          <button onClick={spin} disabled={spinning || !user || betAmount < 10}
+          <button type="button" onClick={spin} disabled={spinning || !user || betAmount < 10}
             className={`w-14 h-14 min-w-[56px] min-h-[56px] rounded-full font-heading font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 ${
               spinning ? 'bg-secondary text-muted-foreground' : 'gold-gradient text-primary-foreground animate-pulse-glow'
             }`}

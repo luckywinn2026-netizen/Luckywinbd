@@ -103,6 +103,7 @@ const LuckySpinGame = () => {
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [coins, setCoins] = useState<{ id: number; x: number; delay: number; size: number; emoji: string }[]>([]);
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spinningRef = useRef(false);
   const [fakeHistory, setFakeHistory] = useState(() => generateFakeHistory());
 
   // Auto-add new entry every 3-6 seconds
@@ -117,10 +118,11 @@ const LuckySpinGame = () => {
   useActivePlayer('lucky-spin', 'Lucky Spin', 'slot', betAmount);
 
   const spin = useCallback(async () => {
-    if (spinning || !user) return;
+    if (spinningRef.current || spinning || !user) return;
     if (betAmount < 10) { gameToast.error('Minimum bet ৳10'); return; }
     if (betAmount > balance) { gameToast.error('Insufficient balance!'); return; }
 
+    spinningRef.current = true;
     setSpinning(true);
     setResult(null);
     setWinAmount(0);
@@ -161,6 +163,7 @@ const LuckySpinGame = () => {
     } catch (e) {
       console.error('game-outcome failed:', e);
       gameToast.error(e instanceof Error ? e.message : 'Spin failed');
+      spinningRef.current = false;
       setSpinning(false);
       if (tickTimerRef.current) clearInterval(tickTimerRef.current);
       return;
@@ -180,6 +183,7 @@ const LuckySpinGame = () => {
     setTimeout(() => {
       if (tickTimerRef.current) clearInterval(tickTimerRef.current);
       playLand();
+      spinningRef.current = false;
       setSpinning(false);
       setResult(seg);
       setWinAmount(actualWin);
@@ -322,7 +326,7 @@ const LuckySpinGame = () => {
                   border: '2px solid hsl(40, 80%, 60%)',
                   borderBottom: 'none',
                 }} />
-                <button onClick={spin} disabled={spinning}
+                <button type="button" onClick={spin} disabled={spinning}
                   className="relative z-10 w-14 h-14 min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center active:scale-90 transition-transform disabled:opacity-70"
                   style={{
                     background: spinning

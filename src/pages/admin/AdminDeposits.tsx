@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import * as api from '@/lib/api';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, Bell, RefreshCw, User, Volume2, Coins, Edit3 } from 'lucide-react';
 
@@ -31,6 +32,7 @@ const AdminDeposits = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [approveModal, setApproveModal] = useState<DepositRow | null>(null);
   const [editedAmount, setEditedAmount] = useState('');
+  const [editedCommission, setEditedCommission] = useState('');
   const [isAmountEdited, setIsAmountEdited] = useState(false);
 
   const playNotificationSound = useCallback(() => {
@@ -100,27 +102,34 @@ const AdminDeposits = () => {
     return () => { supabase.removeChannel(channel); };
   }, [fetchDeposits, playNotificationSound]);
 
-  const handleFinalApprove = async (deposit: DepositRow, amount?: number) => {
+  const handleFinalApprove = async (deposit: DepositRow, amount?: number, commission?: number) => {
     const finalAmount = amount || deposit.amount;
-    
-    // If amount was edited, update the deposit amount first
-    if (amount && amount !== deposit.amount) {
-      const { error: updateError } = await supabase
-        .from('deposits')
-        .update({ amount: finalAmount, status: 'approved' })
-        .eq('id', deposit.id);
-      if (updateError) { toast.error('Failed to approve'); return; }
-    } else {
+    const commissionAmt = commission ?? (editedCommission ? Number(editedCommission) : undefined);
+
+    if (!api.isBackendConfigured()) {
       const { error } = await supabase
         .from('deposits')
-        .update({ status: 'approved' })
+        .update(amount && amount !== deposit.amount ? { amount: finalAmount, status: 'approved' } : { status: 'approved' })
         .eq('id', deposit.id);
       if (error) { toast.error('Failed to approve'); return; }
+      toast.success(`✅ ৳${finalAmount.toLocaleString()} deposit Final Approved!`);
+      setApproveModal(null);
+      fetchDeposits();
+      return;
     }
-    
-    toast.success(`✅ ৳${finalAmount.toLocaleString()} deposit Final Approved! Added to user wallet.`);
-    setApproveModal(null);
-    fetchDeposits();
+
+    try {
+      const result = await api.adminFinalApproveDeposit(deposit.id, finalAmount, commissionAmt);
+      if (!result?.success) {
+        toast.error(result?.error || 'Failed to approve');
+        return;
+      }
+      toast.success(`✅ ৳${finalAmount.toLocaleString()} deposit Final Approved!${commissionAmt ? ` Commission ৳${commissionAmt.toLocaleString()} added.` : ''}`);
+      setApproveModal(null);
+      fetchDeposits();
+    } catch (e) {
+      toast.error((e as Error)?.message || 'Failed to approve');
+    }
   };
 
   const handleReject = (id: string, username: string) => {
@@ -141,6 +150,7 @@ const AdminDeposits = () => {
 
   const openApproveModal = (deposit: DepositRow) => {
     setEditedAmount(String(deposit.amount));
+    setEditedCommission('');
     setIsAmountEdited(false);
     setApproveModal(deposit);
   };
@@ -379,6 +389,21 @@ const AdminDeposits = () => {
               )}
             </div>
 
+            {/* Optional Agent Commission */}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Agent Commission (৳) — optional</label>
+              <input
+                type="number"
+                value={editedCommission}
+                onChange={e => setEditedCommission(e.target.value)}
+                placeholder="0"
+                className="w-full bg-secondary rounded-xl px-3 py-2.5 text-sm font-heading font-bold text-foreground outline-none gold-border focus:ring-2 focus:ring-primary text-center"
+                min={0}
+                step={0.01}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Add extra commission to agent for this deposit</p>
+            </div>
+
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-[10px] text-amber-400">
               ⚠️ Final Approve will add ৳{Number(editedAmount).toLocaleString()} to user wallet (+ 2.5% bonus).
             </div>
@@ -388,7 +413,11 @@ const AdminDeposits = () => {
                 Cancel
               </button>
               <button 
-                onClick={() => handleFinalApprove(approveModal, isAmountEdited ? Number(editedAmount) : undefined)}
+                onClick={() => handleFinalApprove(
+                  approveModal,
+                  isAmountEdited ? Number(editedAmount) : undefined,
+                  editedCommission ? Number(editedCommission) : undefined
+                )}
                 disabled={!editedAmount || Number(editedAmount) <= 0}
                 className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-green-500/20 text-green-400 font-heading font-bold text-sm hover:bg-green-500/30 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >

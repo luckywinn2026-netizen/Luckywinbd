@@ -34,15 +34,18 @@ const SlotGame = ({ gameName, gameId, emoji, symbols, backPath = '/slots', thumb
   const [spinHistory, setSpinHistory] = useState<{ win: boolean; amount: number }[]>([]);
   const [showSplash, setShowSplash] = useState(true);
   const spinCountRef = useRef(0);
+  const spinningRef = useRef(false);
   const handleLoadingComplete = useCallback(() => setShowSplash(false), []);
   const { mascot, mascotSize, background: customBg, backgroundZoom } = useGameAssets(gameId);
   useActivePlayer(gameId, gameName, 'slot', Number(stake));
 
   const spin = async () => {
+    if (spinningRef.current) return;
     const s = Number(stake);
     if (s < 0.5) { gameToast.error('Min bet ৳0.5'); return; }
     if (!placeBet(s, gameName, 'slot')) return;
 
+    spinningRef.current = true;
     setSpinning(true);
     setLastWin(0);
     setShowCelebration(false);
@@ -74,6 +77,7 @@ const SlotGame = ({ gameName, gameId, emoji, symbols, backPath = '/slots', thumb
         symbols[Math.floor(Math.random() * symbols.length)],
       ];
       setReels(finalReels);
+      spinningRef.current = false;
       setSpinning(false);
 
       let winMultiplier = 0;
@@ -278,6 +282,7 @@ const SlotGame = ({ gameName, gameId, emoji, symbols, backPath = '/slots', thumb
           {/* SPIN Button — circular, smaller */}
           <div className="flex justify-center">
           <button
+            type="button"
             onClick={spin}
             disabled={spinning}
             className="w-14 h-14 min-w-[56px] min-h-[56px] rounded-full font-heading font-extrabold text-xs active:scale-[0.97] transition-all duration-150 disabled:opacity-60 relative overflow-hidden flex items-center justify-center"

@@ -542,6 +542,7 @@ const MoneyComingGame = () => {
   const [inFreeSpinMode, setInFreeSpinMode] = useState(false);
   const [screenShake, setScreenShake] = useState(false);
   const autoSpinRef = useRef(false);
+  const spinningRef = useRef(false);
   const spinRef = useRef<() => void>(() => {});
   const outcomeRef = useRef<{ outcome: string; maxWinAmount: number; newBalance: number | null }>({ outcome: 'loss', maxWinAmount: 0, newBalance: null });
   const wildMultRef = useRef(1); // Store wild mult to avoid mismatch between spin() and evaluation
@@ -569,6 +570,7 @@ const MoneyComingGame = () => {
   
   useEffect(() => {
     if (stoppedReels < 4 || !spinning) return;
+    spinningRef.current = false;
     setSpinning(false);
     setStoppedReels(0);
 
@@ -690,10 +692,11 @@ const MoneyComingGame = () => {
   };
 
   const spin = async () => {
-    if (spinning) return;
+    if (spinningRef.current || spinning) return;
     if (betAmount < 0.5) { gameToast.error('Min bet ৳0.5'); return; }
     if (!inFreeSpinMode && betAmount > balance) { gameToast.error('Insufficient balance'); return; }
 
+    spinningRef.current = true;
     setLastWin(0);
     setWinMultiplier(0);
     setIsWin(false);
@@ -715,6 +718,7 @@ const MoneyComingGame = () => {
     } catch (e) {
       console.error('Outcome fetch failed', e);
       gameToast.error(e instanceof Error ? e.message : 'Spin failed');
+      spinningRef.current = false;
       setSpinning(false);
       return;
     }
@@ -1226,7 +1230,7 @@ const MoneyComingGame = () => {
               </button>
             </div>
             {/* Spin — center */}
-            <button onClick={spin} disabled={spinning}
+            <button type="button" onClick={spin} disabled={spinning}
               className="w-14 h-14 min-w-[56px] min-h-[56px] rounded-full font-extrabold text-xs tracking-wide active:scale-[0.97] disabled:opacity-60 flex items-center justify-center shrink-0"
               style={{
                 background: spinning ? 'linear-gradient(135deg, #333, #222)' : 'linear-gradient(135deg, #b8860b, #ffd700, #b8860b)',

@@ -265,6 +265,14 @@ export async function adminApproveAgent(body: { application_id: string; password
   );
 }
 
+/** Create sub-admin with phone + password. Sub-admin logs in at admin panel with same credentials. */
+export async function adminCreateSubAdmin(body: { phone: string; password: string; name?: string }) {
+  return request<{ success: boolean; user_id?: string; phone?: string; message?: string }>(
+    '/api/admin/create-sub-admin',
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
 /** Add agent directly (phone + password) – no existing user required. Agent logs in at /agent-login with same number & password. */
 export async function adminAddAgentDirect(body: { phone: string; password: string; name?: string }) {
   const headers = await getAuthHeaders();
@@ -389,5 +397,30 @@ export async function getWithdrawals() {
 export async function rejectWithdrawal(id: string) {
   return request<{ success: boolean }>(`/api/payments/withdrawals/${id}/reject`, {
     method: 'POST',
+  });
+}
+
+/** POST /api/push/register – save FCM token for Agent/Admin push notifications */
+export async function registerPushToken(body: { fcm_token: string; platform?: string; app_variant?: string }) {
+  return request<{ success: boolean }>('/api/push/register', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** POST /api/push/notify-admin-deposit-approved – Agent calls after approving deposit */
+export async function notifyAdminDepositApproved(depositId: string, amount: number) {
+  return request<{ success: boolean }>('/api/push/notify-admin-deposit-approved', {
+    method: 'POST',
+    body: JSON.stringify({ deposit_id: depositId, amount }),
+  });
+}
+
+/** RPC: admin final approve deposit with optional commission */
+export async function adminFinalApproveDeposit(depositId: string, finalAmount: number, commission?: number) {
+  return rpc<{ success?: boolean; error?: string; amount?: number }>('admin_final_approve_deposit', {
+    p_deposit_id: depositId,
+    p_final_amount: finalAmount,
+    p_commission: commission ?? null,
   });
 }

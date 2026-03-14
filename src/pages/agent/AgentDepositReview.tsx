@@ -102,6 +102,7 @@ const AgentDepositReview = () => {
       toast.error('Failed to approve');
       return;
     }
+    api.notifyAdminDepositApproved(deposit.id, deposit.amount).catch(() => {});
     toast.success(`✅ ৳${deposit.amount.toLocaleString()} Approved! Sent to admin`);
     fetchDeposits();
   };

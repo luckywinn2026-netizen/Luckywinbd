@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Shield, Plus, Trash2, ToggleLeft, ToggleRight, Upload, X, Edit2, Save } from 'lucide-react';
+import { Shield, Plus, Trash2, ToggleLeft, ToggleRight, Upload, X, Edit2, Save, Gift } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface TransactionType {
@@ -62,7 +62,35 @@ const AdminSettings = () => {
   const [numberEdits, setNumberEdits] = useState<Record<string, string>>({});
   const [savingNumbers, setSavingNumbers] = useState(false);
 
-  useEffect(() => { fetchMethods(); fetchTxnTypes(); fetchMethodNumbers(); }, []);
+  // Sign Up Bonus (first-time user bonus + turnover)
+  const [signUpBonusAmount, setSignUpBonusAmount] = useState('10');
+  const [signUpBonusTurnover, setSignUpBonusTurnover] = useState('10');
+  const [savingSignUpBonus, setSavingSignUpBonus] = useState(false);
+
+  useEffect(() => { fetchMethods(); fetchTxnTypes(); fetchMethodNumbers(); fetchSignUpBonus(); }, []);
+
+  const fetchSignUpBonus = async () => {
+    const { data } = await supabase.from('site_settings').select('value').eq('key', 'sign_up_bonus').single();
+    const v = (data?.value as { amount?: number; turnover_multiplier?: number }) ?? {};
+    setSignUpBonusAmount(String(v.amount ?? 10));
+    setSignUpBonusTurnover(String(v.turnover_multiplier ?? 10));
+  };
+
+  const saveSignUpBonus = async () => {
+    const amount = Number(signUpBonusAmount);
+    const turnover = Number(signUpBonusTurnover);
+    if (isNaN(amount) || amount < 0) { toast.error('Invalid bonus amount'); return; }
+    if (isNaN(turnover) || turnover < 0) { toast.error('Invalid turnover multiplier'); return; }
+    setSavingSignUpBonus(true);
+    const { error } = await supabase.from('site_settings').upsert({
+      key: 'sign_up_bonus',
+      value: { amount, turnover_multiplier: turnover },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' });
+    setSavingSignUpBonus(false);
+    if (error) { toast.error('Failed to save'); return; }
+    toast.success('Sign up bonus settings saved!');
+  };
 
   const fetchMethods = async () => {
     const { data } = await supabase.from('payment_methods').select('*').order('sort_order');
@@ -357,6 +385,48 @@ const AdminSettings = () => {
           </div>
         </div>
       )}
+
+      {/* Sign Up Bonus */}
+      <div className="bg-card rounded-xl p-4 gold-border space-y-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Gift size={18} className="text-primary" />
+          <h3 className="font-heading font-bold">Sign Up Bonus</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          First-time users get this bonus on sign up. Turnover = how many times they must bet the bonus amount before withdrawal (e.g. 10 = 10x).
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Bonus Amount (৳)</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={signUpBonusAmount}
+              onChange={e => setSignUpBonusAmount(e.target.value)}
+              className="w-28 bg-secondary rounded-lg px-3 py-2 text-sm font-heading outline-none gold-border"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Turnover (x)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={signUpBonusTurnover}
+              onChange={e => setSignUpBonusTurnover(e.target.value)}
+              className="w-28 bg-secondary rounded-lg px-3 py-2 text-sm font-heading outline-none gold-border"
+            />
+          </div>
+          <button
+            onClick={saveSignUpBonus}
+            disabled={savingSignUpBonus}
+            className="px-4 py-2 rounded-lg gold-gradient font-heading font-bold text-sm text-primary-foreground disabled:opacity-50"
+          >
+            {savingSignUpBonus ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
 
       {/* Admin Role Info */}
       <div className="bg-card rounded-xl p-4 gold-border space-y-4">
