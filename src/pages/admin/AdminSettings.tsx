@@ -254,6 +254,48 @@ const AdminSettings = () => {
     <div className="p-3 md:p-6 space-y-4 md:space-y-6">
       <h1 className="font-heading font-bold text-lg md:text-2xl">⚙️ Settings</h1>
 
+      {/* Sign Up Bonus - First so admin finds it easily */}
+      <div className="bg-card rounded-xl p-4 gold-border space-y-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Gift size={18} className="text-primary" />
+          <h3 className="font-heading font-bold">Sign Up Bonus</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          First-time users get this bonus on sign up. Turnover = how many times they must bet the bonus amount before withdrawal (e.g. 10 = 10x).
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Bonus Amount (৳)</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={signUpBonusAmount}
+              onChange={e => setSignUpBonusAmount(e.target.value)}
+              className="w-28 bg-secondary rounded-lg px-3 py-2 text-sm font-heading outline-none gold-border"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Turnover (x)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={signUpBonusTurnover}
+              onChange={e => setSignUpBonusTurnover(e.target.value)}
+              className="w-28 bg-secondary rounded-lg px-3 py-2 text-sm font-heading outline-none gold-border"
+            />
+          </div>
+          <button
+            onClick={saveSignUpBonus}
+            disabled={savingSignUpBonus}
+            className="px-4 py-2 rounded-lg gold-gradient font-heading font-bold text-sm text-primary-foreground disabled:opacity-50"
+          >
+            {savingSignUpBonus ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
       {/* Payment Methods Management */}
       <div className="bg-card rounded-xl p-4 gold-border space-y-4">
         <div className="flex items-center justify-between">
@@ -385,48 +427,6 @@ const AdminSettings = () => {
           </div>
         </div>
       )}
-
-      {/* Sign Up Bonus */}
-      <div className="bg-card rounded-xl p-4 gold-border space-y-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Gift size={18} className="text-primary" />
-          <h3 className="font-heading font-bold">Sign Up Bonus</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          First-time users get this bonus on sign up. Turnover = how many times they must bet the bonus amount before withdrawal (e.g. 10 = 10x).
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Bonus Amount (৳)</label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={signUpBonusAmount}
-              onChange={e => setSignUpBonusAmount(e.target.value)}
-              className="w-28 bg-secondary rounded-lg px-3 py-2 text-sm font-heading outline-none gold-border"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Turnover (x)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.5"
-              value={signUpBonusTurnover}
-              onChange={e => setSignUpBonusTurnover(e.target.value)}
-              className="w-28 bg-secondary rounded-lg px-3 py-2 text-sm font-heading outline-none gold-border"
-            />
-          </div>
-          <button
-            onClick={saveSignUpBonus}
-            disabled={savingSignUpBonus}
-            className="px-4 py-2 rounded-lg gold-gradient font-heading font-bold text-sm text-primary-foreground disabled:opacity-50"
-          >
-            {savingSignUpBonus ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </div>
 
       {/* Admin Role Info */}
       <div className="bg-card rounded-xl p-4 gold-border space-y-4">
