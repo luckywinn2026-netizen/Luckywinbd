@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Minus, Volume2, VolumeX, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, Coins, Volume2, VolumeX, RotateCcw } from 'lucide-react';
+import BetAmountModal from '@/components/BetAmountModal';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/contexts/WalletContext';
 import * as api from '@/lib/api';
@@ -593,10 +595,9 @@ const Lucky777Game = () => {
 
   const adjustBet = (dir: number) => {
     if (spinning) return;
-    const steps = [0.5, 1, 2, 5, 10, 20, 50, 100, 500, 1000];
-    const idx = steps.indexOf(betAmount);
-    const newIdx = Math.max(0, Math.min(steps.length - 1, idx + dir));
-    setBetAmount(steps[newIdx]);
+    const idx = LUCKY_777_BET_PRESETS.indexOf(betAmount);
+    const newIdx = Math.max(0, Math.min(LUCKY_777_BET_PRESETS.length - 1, idx + dir));
+    setBetAmount(LUCKY_777_BET_PRESETS[newIdx]);
     if (soundEnabled) Lucky777Sound.buttonClick();
   };
 
@@ -1114,40 +1115,35 @@ const Lucky777Game = () => {
             <div className="p-3 space-y-3">
               {/* Bet | Spin | Turbo | Auto — single row */}
               <div className="flex items-center justify-between gap-2">
-                {/* Bet — left */}
+                {/* Bet — left: coin icon + amount, click to open modal */}
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#c9a030' }}>BET</span>
-                  <button onClick={() => adjustBet(-1)} disabled={spinning}
-                    className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30"
+                  <button
+                    type="button"
+                    onClick={() => !spinning && setShowBetModal(true)}
+                    disabled={spinning}
+                    className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-lg active:scale-95 disabled:opacity-30"
                     style={{
                       background: 'linear-gradient(180deg, #3a2000, #2a1400)',
                       border: '2px solid #c9a030',
                       boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,215,0,0.1)',
-                    }}>
-                    <Minus size={16} style={{ color: '#ffd700' }} />
-                  </button>
-
-                  {/* Bet amount — 3D sunken display */}
-                  <div className="min-w-[70px] py-1.5 px-2 rounded-lg text-center shrink-0" style={{
-                    background: 'linear-gradient(180deg, #0a0510 0%, #15102a 50%, #0a0510 100%)',
-                    border: '2px solid #c9a030',
-                    boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.8), 0 1px 0 rgba(255,215,0,0.15)',
-                  }}>
+                    }}
+                  >
+                    <Coins size={18} style={{ color: '#ffd700' }} />
                     <span className="font-black text-xl" style={{
                       background: 'linear-gradient(180deg, #ffe566, #ffd700, #c9a030)',
                       WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                       filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))',
                     }}>৳{betAmount}</span>
-                  </div>
-                  <button onClick={() => adjustBet(1)} disabled={spinning}
-                    className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30"
-                    style={{
-                      background: 'linear-gradient(180deg, #3a2000, #2a1400)',
-                      border: '2px solid #c9a030',
-                      boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,215,0,0.1)',
-                    }}>
-                    <Plus size={16} style={{ color: '#ffd700' }} />
                   </button>
+                  <BetAmountModal
+                    open={showBetModal}
+                    onClose={() => setShowBetModal(false)}
+                    presets={LUCKY_777_BET_PRESETS}
+                    current={betAmount}
+                    onSelect={(v) => { setBetAmount(v); if (soundEnabled) Lucky777Sound.buttonClick(); }}
+                    accentColor="#ffd700"
+                    disabled={spinning}
+                  />
                 </div>
                 {/* Spin — center */}
                 <button
@@ -1198,7 +1194,7 @@ const Lucky777Game = () => {
                   </button>
                   <button
                     onClick={() => { setAutoSpin(!autoSpin); if (soundEnabled) Lucky777Sound.buttonClick(); }}
-                    className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider active:scale-95"
+                    className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider active:scale-95 whitespace-nowrap"
                     style={{
                       background: autoSpin ? 'linear-gradient(180deg, #ffd700, #c9a030)' : 'linear-gradient(180deg, #2a1a00, #1a0c00)',
                       border: `2px solid ${autoSpin ? '#ffe066' : '#5a3a10'}`,

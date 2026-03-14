@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Volume2, VolumeX, Plus, Minus, RotateCcw, Zap } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Coins, RotateCcw, Zap } from 'lucide-react';
+import BetAmountModal from '@/components/BetAmountModal';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/contexts/WalletContext';
 import * as api from '@/lib/api';
@@ -452,12 +453,13 @@ const FortuneGemsGame = () => {
   useEffect(() => { spinRef.current = spin; });
   useEffect(() => { if (autoSpin && !spinning && !animating) spinRef.current(); }, [autoSpin]);
 
+  const FORTUNE_GEMS_BET_PRESETS = [0.5, 1, 2, 5, 10, 20, 50, 100, 500, 1000];
+  const [showBetModal, setShowBetModal] = useState(false);
   const adjustBet = (dir: number) => {
     if (spinning || animating) return;
-    const steps = [0.5, 1, 2, 5, 10, 20, 50, 100, 500, 1000];
-    const idx = steps.indexOf(stake);
-    const newIdx = Math.max(0, Math.min(steps.length - 1, idx + dir));
-    setStake(steps[newIdx]);
+    const idx = FORTUNE_GEMS_BET_PRESETS.indexOf(stake);
+    const newIdx = Math.max(0, Math.min(FORTUNE_GEMS_BET_PRESETS.length - 1, idx + dir));
+    setStake(FORTUNE_GEMS_BET_PRESETS[newIdx]);
   };
 
   return (
@@ -883,25 +885,27 @@ const FortuneGemsGame = () => {
         {/* ═══ CONTROLS — Bet | Spin | Turbo | Auto ═══ */}
         <div className="relative z-10 px-4 pb-0 pt-12">
           <div className="flex items-center justify-between gap-2">
-            {/* Bet — left */}
+            {/* Bet — left: coin icon + amount, click to open modal */}
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] font-extrabold uppercase" style={{ color: '#c9a030' }}>BET</span>
-              <button onClick={() => adjustBet(-1)} disabled={spinning || animating}
-                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30"
-                style={{ background: 'linear-gradient(180deg, #3a2a10, #2a1a08)', border: '2px solid #c9a030' }}>
-                <Minus size={14} style={{ color: '#ffd700' }} />
-              </button>
-              <div className="min-w-[70px] py-1.5 px-2 rounded-lg text-center shrink-0" style={{
-                background: 'linear-gradient(180deg, #2a1a08, #1a0e04)',
-                border: '2px solid #c9a030',
-              }}>
+              <button
+                type="button"
+                onClick={() => !(spinning || animating) && setShowBetModal(true)}
+                disabled={spinning || animating}
+                className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-lg active:scale-95 disabled:opacity-30"
+                style={{ background: 'linear-gradient(180deg, #3a2a10, #2a1a08)', border: '2px solid #c9a030' }}
+              >
+                <Coins size={18} style={{ color: '#ffd700' }} />
                 <span className="font-extrabold text-base" style={{ color: '#ffd700' }}>৳{stake}</span>
-              </div>
-              <button onClick={() => adjustBet(1)} disabled={spinning || animating}
-                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30"
-                style={{ background: 'linear-gradient(180deg, #3a2a10, #2a1a08)', border: '2px solid #c9a030' }}>
-                <Plus size={14} style={{ color: '#ffd700' }} />
               </button>
+              <BetAmountModal
+                open={showBetModal}
+                onClose={() => setShowBetModal(false)}
+                presets={FORTUNE_GEMS_BET_PRESETS}
+                current={stake}
+                onSelect={setStake}
+                accentColor="#ffd700"
+                disabled={spinning || animating}
+              />
             </div>
             {/* Spin — center */}
             <button onClick={spin} disabled={spinning || animating}
@@ -929,7 +933,7 @@ const FortuneGemsGame = () => {
                 <Zap size={10} className="inline mr-1" />TURBO
               </button>
               <button onClick={() => setAutoSpin(!autoSpin)}
-                className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider"
+                className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider whitespace-nowrap"
                 style={{
                   background: autoSpin ? 'linear-gradient(135deg, #ffd700, #ff8800)' : 'linear-gradient(180deg, #3a2a10, #2a1a08)',
                   border: `2px solid ${autoSpin ? '#ffd700' : '#c9a030'}`,

@@ -18,6 +18,9 @@
     "cap:open:android": "npx cap open android",
     "cap:apk:debug": "node scripts/build-debug-apk.cjs",
     "cap:apk:release": "node scripts/build-release-apk.cjs",
+    "cap:apk:release:user": "node scripts/build-user-apk.cjs",
+    "cap:apk:release:admin": "node scripts/build-admin-apk.cjs",
+    "cap:apk:release:agent": "node scripts/build-agent-apk.cjs",
     "cap:apk:release:all": "node scripts/build-all-release-apks.cjs",
     "cap:apk:debug:gradle": "cd android && .\\gradlew.bat assembleDebug",
     "cap:icons": "npx @capacitor/assets generate --android --iconBackgroundColor \"#061125\" --iconBackgroundColorDark \"#061125\""

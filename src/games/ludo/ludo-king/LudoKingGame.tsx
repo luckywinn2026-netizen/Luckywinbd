@@ -39,8 +39,9 @@ const LEVELS = [
   { level: 7, bet: 500 }, { level: 8, bet: 700 }, { level: 9, bet: 900 },
   { level: 10, bet: 1000 },
 ];
+
 const WIN_MULTI = 1.8;
-const MAX_PATH_POS = 51; // Indian Ludo: 52 steps on main path (0-51)
+const MAX_PATH_POS = 51; // 0-51 = 52 main path cells
 const SAFE_ABS = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
 const TURN_WINDOW_SECONDS = 7;
 const TOKEN_STEP_MS = 110;
@@ -51,15 +52,22 @@ const PATH: [number, number][] = [
   [1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],[7,14],[8,14],
   [8,13],[8,12],[8,11],[8,10],[8,9],[9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[14,7],[14,6],
 ];
-const HOME_START = 52; // First home cell (after 52 main path steps)
-const HOME_END = 57;   // Last home cell before center
-const FINAL_HOME = 58; // Center
-const BLUE_HOME: [number, number][] = [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]];
-const GREEN_HOME: [number, number][] = [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]];
+
+// FIXED: 5 colored home cells + 1 center = 57 total relative target
+const HOME_START = 52; // first colored home cell
+const HOME_END = 56;   // last colored home cell
+const FINAL_HOME = 57; // center
+
+// FIXED: removed one extra home cell from each lane
+const BLUE_HOME: [number, number][] = [[7,12],[7,11],[7,10],[7,9],[7,8]];
+const GREEN_HOME: [number, number][] = [[7,2],[7,3],[7,4],[7,5],[7,6]];
+
 const BLUE_BASE: [number, number][] = [[11,11],[11,13],[13,11],[13,13]];
 const GREEN_BASE: [number, number][] = [[2,2],[2,4],[4,2],[4,4]];
+
 type TPos = number;
 type Player = 'blue' | 'green';
+
 type ReplayBoardState = {
   blue: TPos[];
   green: TPos[];
@@ -70,11 +78,20 @@ type ReplayBoardState = {
   winner: Player | null;
   phase: 'playing' | 'result';
 };
+
 const toAbs = (rel: number, p: Player) => (rel + (p === 'blue' ? 39 : 13)) % 52;
+
 const getCoords = (pos: TPos, player: Player, idx: number): [number, number] => {
   if (pos === -1) return player === 'blue' ? BLUE_BASE[idx] : GREEN_BASE[idx];
-  if (pos >= HOME_START && pos <= HOME_END) return player === 'blue' ? BLUE_HOME[pos - HOME_START] : GREEN_HOME[pos - HOME_START];
+
+  if (pos >= HOME_START && pos <= HOME_END) {
+    return player === 'blue'
+      ? BLUE_HOME[pos - HOME_START]
+      : GREEN_HOME[pos - HOME_START];
+  }
+
   if (pos === FINAL_HOME) return [7, 7];
+
   return PATH[toAbs(pos, player)];
 };
 
@@ -84,6 +101,7 @@ const BOARD_SCALE_X = 100 - BOARD_INSET_X * 2;
 const BOARD_SCALE_Y = 100 - BOARD_INSET_Y * 2;
 const TOKEN_SIZE = 5.6;
 const TOKEN_HALF = TOKEN_SIZE / 2;
+
 const tokenPosX = (gridVal: number) => BOARD_INSET_X + ((gridVal + 0.5) / 15) * BOARD_SCALE_X - TOKEN_HALF;
 const tokenPosY = (gridVal: number) => BOARD_INSET_Y + ((gridVal + 0.5) / 15) * BOARD_SCALE_Y - TOKEN_HALF;
 
@@ -94,16 +112,35 @@ const cloneReplayState = (state: ReplayBoardState): ReplayBoardState => ({
   movable: [...state.movable],
 });
 
-const applyReplayMove = (state: ReplayBoardState, player: Player, tokenIdx: number, diceVal: number): ReplayBoardState => {
+// FIXED: exact home check + no extra home step
+const applyReplayMove = (
+  state: ReplayBoardState,
+  player: Player,
+  tokenIdx: number,
+  diceVal: number
+): ReplayBoardState => {
   const next = cloneReplayState(state);
   const myTokens = player === 'blue' ? [...next.blue] : [...next.green];
   const oppTokens = player === 'blue' ? [...next.green] : [...next.blue];
 
   const startPos = myTokens[tokenIdx];
+
   if (startPos === -1) {
+    if (diceVal !== 6) return next;
     myTokens[tokenIdx] = 0;
   } else {
-    myTokens[tokenIdx] = startPos + diceVal;
+    const target = startPos + diceVal;
+
+    // exact number required for center
+    if (target > FINAL_HOME) {
+      next.dice = diceVal;
+      next.rolled = false;
+      next.movable = [];
+      next.turn = player === 'blue' ? 'green' : 'blue';
+      return next;
+    }
+
+    myTokens[tokenIdx] = target;
   }
 
   const movedPos = myTokens[tokenIdx];
@@ -114,8 +151,11 @@ const applyReplayMove = (state: ReplayBoardState, player: Player, tokenIdx: numb
     const absPos = toAbs(movedPos, player);
     if (!SAFE_ABS.has(absPos)) {
       const oppPlayer = player === 'blue' ? 'green' : 'blue';
+
       const oppIndicesOnSquare = oppTokens
-        .map((pos, idx) => (pos >= 0 && pos <= MAX_PATH_POS && toAbs(pos, oppPlayer) === absPos ? idx : -1))
+        .map((pos, idx) => (
+          pos >= 0 && pos <= MAX_PATH_POS && toAbs(pos, oppPlayer) === absPos ? idx : -1
+        ))
         .filter((idx) => idx !== -1);
 
       if (oppIndicesOnSquare.length === 1) {
@@ -153,20 +193,35 @@ const applyReplayMove = (state: ReplayBoardState, player: Player, tokenIdx: numb
 };
 
 const FACE_DOTS: Record<number, [number, number][]> = {
-  1: [[1,1]], 2: [[0,2],[2,0]], 3: [[0,2],[1,1],[2,0]],
-  4: [[0,0],[0,2],[2,0],[2,2]], 5: [[0,0],[0,2],[1,1],[2,0],[2,2]],
+  1: [[1,1]],
+  2: [[0,2],[2,0]],
+  3: [[0,2],[1,1],[2,0]],
+  4: [[0,0],[0,2],[2,0],[2,2]],
+  5: [[0,0],[0,2],[1,1],[2,0],[2,2]],
   6: [[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]],
 };
 
 const DiceFace3D = ({ val, style, className = '' }: { val: number; style: React.CSSProperties; className?: string }) => (
-  <div className={`absolute w-full h-full rounded-[6px] grid grid-cols-3 grid-rows-3 p-2 ${className}`} style={{ backfaceVisibility: 'hidden', ...style }}>
+  <div
+    className={`absolute w-full h-full rounded-[6px] grid grid-cols-3 grid-rows-3 p-2 ${className}`}
+    style={{ backfaceVisibility: 'hidden', ...style }}
+  >
     {Array.from({ length: 9 }, (_, i) => {
       const r = Math.floor(i / 3);
       const c = i % 3;
       const has = (FACE_DOTS[val] || []).some(([dr, dc]) => dr === r && dc === c);
+
       return (
         <div key={i} className="flex items-center justify-center">
-          {has && <div className="w-[10px] h-[10px] rounded-full" style={{ background: 'radial-gradient(circle at 35% 35%, #ffffff, #d0d0d0)', boxShadow: 'inset -1px -1px 2px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.25)' }} />}
+          {has && (
+            <div
+              className="w-[10px] h-[10px] rounded-full"
+              style={{
+                background: 'radial-gradient(circle at 35% 35%, #ffffff, #d0d0d0)',
+                boxShadow: 'inset -1px -1px 2px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.25)',
+              }}
+            />
+          )}
         </div>
       );
     })}
@@ -177,12 +232,29 @@ const opposite = (v: number) => 7 - v;
 const rightFace = (v: number) => [0, 3, 1, 5, 2, 6, 4][v] || 1;
 const topFace = (v: number) => [0, 2, 1, 4, 6, 5, 3][v] || 1;
 
-const Dice3D = ({ value, rolling, onClick, disabled, diceColor = 'blue' }: { value: number; rolling: boolean; onClick?: () => void; disabled?: boolean; diceColor?: DiceColorKey }) => {
+const Dice3D = ({
+  value,
+  rolling,
+  onClick,
+  disabled,
+  diceColor = 'blue',
+}: {
+  value: number;
+  rolling: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+  diceColor?: DiceColorKey;
+}) => {
   const s = 56;
   const half = s / 2;
   const d = DICE_PRESETS[diceColor].colors;
+
   return (
-    <div onClick={disabled ? undefined : onClick} className={disabled ? 'opacity-60 cursor-default' : 'cursor-pointer active:scale-95 transition-transform'} style={{ perspective: '500px', width: s, height: s }}>
+    <div
+      onClick={disabled ? undefined : onClick}
+      className={disabled ? 'opacity-60 cursor-default' : 'cursor-pointer active:scale-95 transition-transform'}
+      style={{ perspective: '500px', width: s, height: s }}
+    >
       <motion.div
         animate={rolling ? { rotateX: [0, 360, 720, 1080], rotateY: [0, 270, 540, 810], rotateZ: [0, 90, 180, 270] } : { rotateX: 0, rotateY: 0, rotateZ: 0 }}
         transition={{ duration: 0.6, repeat: rolling ? Infinity : 0, ease: 'linear' }}
@@ -226,6 +298,7 @@ const MatchmakingScreen = ({
   useEffect(() => {
     const dotTimer = setInterval(() => setDots((prev) => prev.length >= 3 ? '' : `${prev}.`), 400);
     const countTimer = setInterval(() => setFakePlayers((prev) => prev + Math.floor(Math.random() * 12) - 4), 800);
+
     const foundTimer = setTimeout(async () => {
       setMatchError(null);
       try {
@@ -241,6 +314,7 @@ const MatchmakingScreen = ({
         setMatchError((e as Error).message || 'Failed to start match');
       }
     }, 1800);
+
     return () => {
       clearInterval(dotTimer);
       clearInterval(countTimer);
@@ -264,6 +338,7 @@ const MatchmakingScreen = ({
           <ArrowLeft className="w-5 h-5" />
         </Button>
       </div>
+
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-sm w-full text-center">
         <div className="mb-8">
           <div className="flex items-center justify-center gap-2 mb-1">
@@ -271,6 +346,7 @@ const MatchmakingScreen = ({
             <span className="text-green-400 text-sm font-medium">{fakePlayers} players online</span>
           </div>
         </div>
+
         <div className="relative mb-8 flex items-center justify-center" style={{ height: 120 }}>
           {searchPhase === 'searching' ? (
             <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }} className="w-24 h-24 rounded-full flex items-center justify-center text-5xl relative z-10" style={{ background: 'linear-gradient(135deg, hsl(var(--muted)), hsl(var(--muted)/0.5))' }}>
@@ -282,11 +358,13 @@ const MatchmakingScreen = ({
             </motion.div>
           )}
         </div>
+
         <AnimatePresence mode="wait">
           {searchPhase === 'searching' && (
             <motion.div key="searching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <h2 className="text-xl font-bold text-foreground mb-2">Finding opponent{dots}</h2>
               <p className="text-muted-foreground text-sm">Server is preparing your match</p>
+
               {matchError && (
                 <div className="mt-2">
                   <p className="text-destructive text-sm">{matchError}</p>
@@ -295,13 +373,17 @@ const MatchmakingScreen = ({
                   </Button>
                 </div>
               )}
+
               <div className="mt-4 overflow-hidden h-8 relative">
                 <motion.div animate={{ y: [0, -16, -32, -48, -64, -80] }} transition={{ duration: 4, repeat: Infinity, ease: 'linear' }} className="absolute inset-x-0">
-                  {MATCH_SCROLL_NAMES.map((name, i) => <p key={i} className="text-muted-foreground/60 text-xs h-4 leading-4">{name}</p>)}
+                  {MATCH_SCROLL_NAMES.map((name, i) => (
+                    <p key={i} className="text-muted-foreground/60 text-xs h-4 leading-4">{name}</p>
+                  ))}
                 </motion.div>
               </div>
             </motion.div>
           )}
+
           {searchPhase === 'found' && opponent && (
             <motion.div key="found" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
               <h2 className="text-xl font-bold text-green-400 mb-2">✅ Match found!</h2>
@@ -313,7 +395,9 @@ const MatchmakingScreen = ({
                   <p className="text-foreground font-bold text-sm truncate">{userProfile.name}</p>
                   <p className="text-primary text-xs font-semibold">You</p>
                 </div>
+
                 <span className="text-2xl">VS</span>
+
                 <div className="bg-card/50 border border-border rounded-xl p-4 flex-1 min-w-0">
                   <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-2 border-2 border-primary">
                     <img src={opponent.avatar} alt={opponent.name} className="w-full h-full object-cover" />
@@ -327,10 +411,13 @@ const MatchmakingScreen = ({
               </div>
             </motion.div>
           )}
+
           {searchPhase === 'ready' && (
             <motion.div key="ready" initial={{ opacity: 0, scale: 1.2 }} animate={{ opacity: 1, scale: 1 }}>
               <h2 className="text-2xl font-bold gold-text mb-2">🎲 Game starting!</h2>
-              <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 0.5, repeat: Infinity }} className="text-4xl mt-4">⚔️</motion.div>
+              <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 0.5, repeat: Infinity }} className="text-4xl mt-4">
+                ⚔️
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -343,38 +430,47 @@ const LudoKingGame = () => {
   const navigate = useNavigate();
   const { balance, refreshBalance } = useWallet();
   const { profile } = useAuth();
+
   const [showLoading, setShowLoading] = useState(true);
   const [phase, setPhase] = useState<'levels' | 'searching' | 'playing' | 'result'>('levels');
   const [matchId, setMatchId] = useState<string | null>(null);
   const [levelIdx, setLevelIdx] = useState(0);
   const [betAmt, setBetAmt] = useState(0);
   const [currentOpponent, setCurrentOpponent] = useState<{ name: string; avatar: string; level: number; wins: number }>({ name: 'Opponent', avatar: '', level: 1, wins: 0 });
+
   const [blue, setBlue] = useState<TPos[]>([-1, -1, -1, -1]);
   const [green, setGreen] = useState<TPos[]>([-1, -1, -1, -1]);
   const [displayBlue, setDisplayBlue] = useState<TPos[]>([-1, -1, -1, -1]);
   const [displayGreen, setDisplayGreen] = useState<TPos[]>([-1, -1, -1, -1]);
+
   const [turn, setTurn] = useState<Player>('blue');
   const [dice, setDice] = useState(1);
   const [rolling, setRolling] = useState(false);
+
   const [aiRolling, setAiRolling] = useState(false);
   const [aiPhase, setAiPhase] = useState<'idle' | 'rolling' | 'thinking' | 'moving'>('idle');
   const [aiDisplayDice, setAiDisplayDice] = useState(1);
   const [aiPlaybackActive, setAiPlaybackActive] = useState(false);
+
   const [rolled, setRolled] = useState(false);
   const [movable, setMovable] = useState<number[]>([]);
   const [winner, setWinner] = useState<Player | null>(null);
   const [specialEffect, setSpecialEffect] = useState<'capture' | 'home' | 'triple6' | 'win' | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [turnTimer, setTurnTimer] = useState(5);
+
   const [previousLevelIdx, setPreviousLevelIdx] = useState<number>(() => {
     const saved = localStorage.getItem('ludo_prev_level');
     return saved ? Number(saved) : -1;
   });
+
   const [userTokenColor, setUserTokenColor] = useState<TokenColorKey>(() => (localStorage.getItem('ludo_token_color') as TokenColorKey) || 'blue');
   const [userDiceColor, setUserDiceColor] = useState<DiceColorKey>(() => (localStorage.getItem('ludo_dice_color') as DiceColorKey) || 'blue');
   const [oppTokenColor, setOppTokenColor] = useState<TokenColorKey>(() => (localStorage.getItem('ludo_opp_token_color') as TokenColorKey) || 'green');
   const [oppDiceColor, setOppDiceColor] = useState<DiceColorKey>(() => (localStorage.getItem('ludo_opp_dice_color') as DiceColorKey) || 'green');
+
   const [currentMatch, setCurrentMatch] = useState<api.LudoMatchResponse>(null);
+
   const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const aiPlaybackTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const tokenAnimationTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -436,6 +532,7 @@ const LudoKingGame = () => {
       });
       return;
     }
+
     setDisplayGreen((prev) => {
       const next = [...prev];
       next[tokenIdx] = pos;
@@ -447,6 +544,7 @@ const LudoKingGame = () => {
     if (from === to) return [];
     if (from === -1 && to === 0) return [0];
     if (to === -1 || to < from) return [to];
+
     const steps: TPos[] = [];
     for (let pos = from + 1; pos <= to; pos += 1) {
       steps.push(pos);
@@ -456,10 +554,12 @@ const LudoKingGame = () => {
 
   const animateTokenMove = useCallback((player: Player, tokenIdx: number, from: TPos, to: TPos) => {
     const path = buildTokenPath(from, to);
+
     if (!path.length) {
       setDisplayToken(player, tokenIdx, to);
       return;
     }
+
     path.forEach((pos, idx) => {
       tokenAnimationTimersRef.current.push(setTimeout(() => {
         setDisplayToken(player, tokenIdx, pos);
@@ -498,6 +598,7 @@ const LudoKingGame = () => {
 
   const hydrateMatch = useCallback((match: api.LudoMatchResponse, forcedPhase?: 'levels' | 'searching' | 'playing' | 'result') => {
     setCurrentMatch(match);
+
     if (!match) {
       clearAiPlayback();
       winnerRef.current = null;
@@ -516,10 +617,12 @@ const LudoKingGame = () => {
 
     const state = match.state;
     if (!state) return;
+
     setMatchId(match.id);
     setLevelIdx(match.levelIdx);
     setBetAmt(match.betAmount);
     setCurrentOpponent(match.opponent || { name: 'Opponent', avatar: 'https://api.dicebear.com/9.x/adventurer/svg?seed=AI', level: 1, wins: 0 });
+
     applyBoardState({
       blue: [...(state.blue ?? [-1, -1, -1, -1])],
       green: [...(state.green ?? [-1, -1, -1, -1])],
@@ -530,9 +633,11 @@ const LudoKingGame = () => {
       winner: state.winner ?? null,
       phase: state.phase === 'result' ? 'result' : 'playing',
     }, forcedPhase === 'playing' || forcedPhase === 'result' ? forcedPhase : undefined);
+
     if (!state.winner) {
       winnerRef.current = null;
     }
+
     if (forcedPhase) {
       setPhase(forcedPhase);
     } else {
@@ -546,9 +651,7 @@ const LudoKingGame = () => {
     const blueChanged = blue.some((pos, idx) => pos !== prevBlue[idx]);
     const greenChanged = green.some((pos, idx) => pos !== prevGreen[idx]);
 
-    if (!blueChanged && !greenChanged) {
-      return;
-    }
+    if (!blueChanged && !greenChanged) return;
 
     clearTokenAnimations();
 
@@ -583,12 +686,14 @@ const LudoKingGame = () => {
     setPhase('playing');
 
     let cursor = initialDelay;
+
     aiTurns.forEach((turnData, idx) => {
       const thinkMs = 240 + ((turnData.dice + idx) % 3) * 120;
       const rollMs = 760 + (((turnData.tokenIdx ?? idx) + turnData.dice) % 2) * 140;
       const settleMs = 420 + ((idx + turnData.dice) % 2) * 180;
       const actionMs = turnData.skipped ? 220 : 180;
       const startAt = cursor + thinkMs;
+
       aiPlaybackTimersRef.current.push(setTimeout(() => {
         playDiceRoll();
         setAiPhase('rolling');
@@ -612,6 +717,7 @@ const LudoKingGame = () => {
 
       aiPlaybackTimersRef.current.push(setTimeout(() => {
         setAiPhase(turnData.skipped ? 'thinking' : 'moving');
+
         if (!turnData.skipped && turnData.tokenIdx !== null) {
           replayState = applyReplayMove(replayState, 'green', turnData.tokenIdx, turnData.dice);
           playTokenMove();
@@ -624,6 +730,7 @@ const LudoKingGame = () => {
             dice: turnData.dice,
           };
         }
+
         applyBoardState(replayState, 'playing');
       }, startAt + rollMs + settleMs + actionMs));
 
@@ -637,7 +744,9 @@ const LudoKingGame = () => {
     const finishSignature = match.state.lastAction
       ? `${match.state.lastAction.player}-${match.state.lastAction.tokenIdx}-${match.state.lastAction.diceVal}-${match.state.lastAction.captured}-${match.state.lastAction.reachedHome}`
       : '';
+
     const finishAt = cursor + 180;
+
     aiPlaybackTimersRef.current.push(setTimeout(() => {
       suppressActionSignatureRef.current = finishSignature;
       hydrateMatch(match, match.state.phase === 'result' ? 'result' : 'playing');
@@ -648,10 +757,12 @@ const LudoKingGame = () => {
   const applyMatch = useCallback((match: api.LudoMatchResponse | null, forcedPhase?: 'levels' | 'searching' | 'playing' | 'result', replaySeed?: ReplayBoardState | null, replayDelay?: number) => {
     if (!match) return;
     const needsAiReplay = Boolean(replaySeed && match?.state?.aiTurns?.length);
+
     if (needsAiReplay && replaySeed) {
       playAiTurns(match, replaySeed, replayDelay);
       return;
     }
+
     hydrateMatch(match, forcedPhase);
   }, [hydrateMatch, playAiTurns]);
 
@@ -673,14 +784,17 @@ const LudoKingGame = () => {
   useEffect(() => {
     const action = currentMatch?.state.lastAction;
     const signature = action ? `${action.player}-${action.tokenIdx}-${action.diceVal}-${action.captured}-${action.reachedHome}` : '';
+
     if (signature && signature === suppressActionSignatureRef.current) {
       suppressActionSignatureRef.current = '';
       lastActionRef.current = signature;
       return;
     }
+
     if (signature && signature !== lastActionRef.current) {
       lastActionRef.current = signature;
       playTokenMove();
+
       if (action?.captured) {
         playCapture();
         setSpecialEffect('capture');
@@ -697,6 +811,7 @@ const LudoKingGame = () => {
   useEffect(() => {
     if (winner && winner !== winnerRef.current) {
       winnerRef.current = winner;
+
       if (winner === 'blue') {
         playWin();
         setSpecialEffect('win');
@@ -705,6 +820,7 @@ const LudoKingGame = () => {
         playLose();
         toast.error('😔 You lost!');
       }
+
       refreshBalance();
       setTimeout(() => setSpecialEffect(null), 2000);
     }
@@ -713,35 +829,48 @@ const LudoKingGame = () => {
   useEffect(() => {
     if (turn === 'blue' && phase === 'playing' && !winner && !rolling && !aiPlaybackActive && matchId && !pendingActionRef.current) {
       setTurnTimer(TURN_WINDOW_SECONDS);
+
       turnTimerRef.current = setInterval(() => {
         setTurnTimer((prev) => {
           if (prev <= 1) {
             if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+
             const replaySeed: ReplayBoardState = rolled
               ? { ...captureBoardState(), rolled: false, movable: [], turn: 'green', phase: 'playing' }
               : { ...captureBoardState(), turn: 'green', rolled: false, movable: [], phase: 'playing' };
+
             toast(rolled ? '⏰ Move time over! Turn passed.' : '⏰ Roll time over! Turn passed.', { duration: 1500 });
-            api.passLudoTurn({ matchId }).then((match) => applyMatch(match ?? null, undefined, replaySeed)).catch((err) => {
+
+            api.passLudoTurn({ matchId }).then((match) => {
+              applyMatch(match ?? null, undefined, replaySeed);
+            }).catch((err) => {
               console.error('Pass turn failed:', err);
               toast.error('Turn pass failed. Please try again.');
             });
+
             return 0;
           }
+
           return prev - 1;
         });
       }, 1000);
     } else if (turnTimerRef.current) {
       clearInterval(turnTimerRef.current);
     }
-    return () => { if (turnTimerRef.current) clearInterval(turnTimerRef.current); };
+
+    return () => {
+      if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+    };
   }, [turn, phase, winner, rolled, rolling, aiPlaybackActive, matchId, applyMatch, captureBoardState]);
 
   const startGame = (li: number) => {
     playClick();
+
     if (li > previousLevelIdx) {
       setPreviousLevelIdx(li);
       localStorage.setItem('ludo_prev_level', String(li));
     }
+
     setPhase('searching');
     setLevelIdx(li);
   };
@@ -762,28 +891,34 @@ const LudoKingGame = () => {
 
   const rollDice = async () => {
     if (!matchId || rolling || rolled || turn !== 'blue' || phase !== 'playing' || pendingActionRef.current) return;
+
     try {
       pendingActionRef.current = true;
       playDiceRoll();
       setRolling(true);
+
       const matchPromise = api.rollLudoDice({ matchId });
       await new Promise((resolve) => setTimeout(resolve, 800));
       const match = await matchPromise;
+
       setRolling(false);
+
       const lastUserRoll = match?.state.lastUserRoll;
-      const replaySeed = match?.state.aiTurns?.length
+      const replaySeed: ReplayBoardState | null = match?.state.aiTurns?.length
         ? {
             ...captureBoardState(),
             dice: lastUserRoll?.diceVal ?? dice,
-            turn: 'blue',
+            turn: 'blue' as Player,
             rolled: false,
             movable: [],
-            phase: 'playing' as const,
+            phase: 'playing',
           }
         : null;
+
       const replayDelay = match?.state.aiTurns?.length
         ? (lastUserRoll?.hadMove ? 420 : 1050)
         : undefined;
+
       applyMatch(match, undefined, replaySeed, replayDelay);
     } catch (error) {
       setRolling(false);
@@ -795,13 +930,17 @@ const LudoKingGame = () => {
 
   const performUserMove = useCallback(async (i: number) => {
     if (!matchId || turn !== 'blue' || !rolled || !movable.includes(i) || pendingActionRef.current) return;
+
     try {
       pendingActionRef.current = true;
       clearAutoMove();
+
       const beforeMove = captureBoardState();
       const replaySeed = applyReplayMove(beforeMove, 'blue', i, dice);
       const replayDelay = estimateBoardTransitionMs(beforeMove, replaySeed);
+
       playTokenMove();
+
       const match = await api.moveLudoToken({ matchId, tokenIdx: i });
       if (match) applyMatch(match, undefined, replaySeed, replayDelay);
     } catch (error) {
@@ -824,9 +963,11 @@ const LudoKingGame = () => {
 
     const onlyToken = movable[0];
     const autoMoveKey = `${matchId}-${dice}-${onlyToken}`;
+
     if (autoMoveKeyRef.current === autoMoveKey) {
       return;
     }
+
     autoMoveKeyRef.current = autoMoveKey;
 
     autoMoveTimerRef.current = setTimeout(() => {
@@ -862,14 +1003,23 @@ const LudoKingGame = () => {
       <div className="min-h-screen navy-gradient p-4">
         <div className="max-w-md mx-auto">
           <div className="flex items-center gap-3 mb-6">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/slots')} className="text-foreground"><ArrowLeft /></Button>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/slots')} className="text-foreground">
+              <ArrowLeft />
+            </Button>
             <h1 className="text-2xl font-bold gold-text">🎲 Ludo King</h1>
           </div>
+
           <p className="text-muted-foreground text-center mb-2">Server-authoritative AI match • Win {WIN_MULTI}x</p>
           <p className="text-primary text-center mb-6 font-bold">Balance: ৳{balance.toFixed(0)}</p>
+
           <div className="grid grid-cols-2 gap-3">
             {LEVELS.map((lvl, i) => (
-              <button key={i} onClick={() => startGame(i)} disabled={balance < lvl.bet || pendingActionRef.current} className={`p-4 rounded-xl border text-left transition-all ${balance >= lvl.bet ? 'bg-card gold-border hover:border-primary text-foreground card-glow active:scale-95 cursor-pointer' : 'bg-muted/50 border-border text-muted-foreground/50 opacity-50'}`}>
+              <button
+                key={i}
+                onClick={() => startGame(i)}
+                disabled={balance < lvl.bet || pendingActionRef.current}
+                className={`p-4 rounded-xl border text-left transition-all ${balance >= lvl.bet ? 'bg-card gold-border hover:border-primary text-foreground card-glow active:scale-95 cursor-pointer' : 'bg-muted/50 border-border text-muted-foreground/50 opacity-50'}`}
+              >
                 <div className="text-lg font-bold">Level {lvl.level}</div>
                 <div className={balance >= lvl.bet ? 'text-primary font-semibold' : 'text-muted-foreground font-semibold'}>৳{lvl.bet}</div>
                 <div className={`text-xs ${balance >= lvl.bet ? 'text-green-400' : 'text-muted-foreground/50'}`}>Win: ৳{(lvl.bet * WIN_MULTI).toFixed(0)}</div>
@@ -899,6 +1049,7 @@ const LudoKingGame = () => {
 
   if (phase === 'result') {
     const won = winner === 'blue';
+
     return (
       <div className="min-h-screen navy-gradient flex items-center justify-center p-4">
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="bg-card gold-border backdrop-blur rounded-2xl p-8 text-center max-w-sm w-full card-glow">
@@ -920,6 +1071,7 @@ const LudoKingGame = () => {
 
   const displayTurn: Player = turn;
   const opponentDiceValue = aiPlaybackActive && turn === 'green' ? aiDisplayDice : dice;
+
   const opponentStatusText = aiPlaybackActive
     ? aiPhase === 'rolling'
       ? 'Opponent rolling...'
@@ -927,6 +1079,7 @@ const LudoKingGame = () => {
         ? 'Opponent moving...'
         : 'Opponent thinking...'
     : 'Server AI thinking...';
+
   const userStatusText = aiPlaybackActive && turn === 'blue'
     ? 'Result shown... opponent next'
     : rolled
@@ -939,12 +1092,23 @@ const LudoKingGame = () => {
         <Button variant="ghost" size="icon" onClick={() => abandonAndExit(false)} className="text-foreground h-9 w-9">
           <ArrowLeft className="w-5 h-5" />
         </Button>
+
         <div className="flex-1 flex items-center justify-center gap-2">
           <span className="text-2xl" style={{ filter: 'drop-shadow(0 2px 6px rgba(255,215,0,0.5))' }}>👑</span>
-          <h1 className="text-2xl font-black tracking-widest uppercase" style={{ background: 'linear-gradient(180deg, #FFF8DC 0%, #FFD700 25%, #DAA520 50%, #B8860B 75%, #8B6914 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.7))', letterSpacing: '3px' }}>
+          <h1
+            className="text-2xl font-black tracking-widest uppercase"
+            style={{
+              background: 'linear-gradient(180deg, #FFF8DC 0%, #FFD700 25%, #DAA520 50%, #B8860B 75%, #8B6914 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.7))',
+              letterSpacing: '3px',
+            }}
+          >
             LUDO KING
           </h1>
         </div>
+
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} className="text-foreground h-9 w-9">
             <Settings className="w-4 h-4" />
@@ -966,6 +1130,7 @@ const LudoKingGame = () => {
               </div>
               {displayTurn === 'green' && <p className={`${oppDiceTheme.text} text-[9px] font-bold animate-pulse`}>{opponentStatusText}</p>}
             </div>
+
             <div className={`text-center px-3 py-1.5 rounded-lg ${displayTurn === 'green' ? `${oppDiceTheme.bg} ring-1 ${oppDiceTheme.ring}` : 'bg-card/30'}`}>
               <div className={`${oppDiceTheme.text} font-bold text-[10px] flex items-center gap-1 justify-center`}>
                 <img src={currentOpponent?.avatar || ''} alt="" className="w-4 h-4 rounded-full" />
@@ -978,9 +1143,11 @@ const LudoKingGame = () => {
           <div className="relative px-2 py-1">
             <div className="relative w-full aspect-square overflow-hidden rounded-lg">
               <div className="absolute inset-0"><LudoBoard /></div>
+
               {displayBlue.map((pos, i) => {
                 const [r, c] = getCoords(pos, 'blue', i);
                 const canMove = turn === 'blue' && rolled && movable.includes(i);
+
                 return (
                   <motion.div
                     key={`b${i}`}
@@ -992,7 +1159,12 @@ const LudoKingGame = () => {
                       e.stopPropagation();
                       if (canMove) handleTokenClick(i);
                     }}
-                    onKeyDown={(e) => { if (canMove && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleTokenClick(i); } }}
+                    onKeyDown={(e) => {
+                      if (canMove && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        handleTokenClick(i);
+                      }
+                    }}
                     className={`absolute rounded-full flex items-center justify-center text-[7px] font-bold text-white select-none touch-manipulation ${canMove ? 'z-30 animate-pulse ring-2 ring-primary cursor-pointer active:scale-95' : 'z-10'} ${pos === FINAL_HOME ? 'opacity-50' : ''}`}
                     style={{
                       width: `${TOKEN_SIZE}%`,
@@ -1008,15 +1180,25 @@ const LudoKingGame = () => {
                   </motion.div>
                 );
               })}
+
               {displayGreen.map((pos, i) => {
                 const [r, c] = getCoords(pos, 'green', i);
+
                 return (
                   <motion.div
                     key={`g${i}`}
                     animate={{ left: `${tokenPosX(c)}%`, top: `${tokenPosY(r)}%` }}
                     transition={{ type: 'tween', duration: 0.18, ease: 'easeOut' }}
                     className={`absolute rounded-full flex items-center justify-center text-[7px] font-bold text-white z-10 pointer-events-none ${pos === FINAL_HOME ? 'opacity-50' : ''}`}
-                    style={{ width: `${TOKEN_SIZE}%`, height: `${TOKEN_SIZE}%`, left: `${tokenPosX(c)}%`, top: `${tokenPosY(r)}%`, background: oppTokenTheme.gradient, boxShadow: '0 3px 6px rgba(0,0,0,0.5), inset 0 2px 3px rgba(255,255,255,0.4), inset 0 -2px 3px rgba(0,0,0,0.3)', border: `1.5px solid ${oppTokenTheme.border}` }}
+                    style={{
+                      width: `${TOKEN_SIZE}%`,
+                      height: `${TOKEN_SIZE}%`,
+                      left: `${tokenPosX(c)}%`,
+                      top: `${tokenPosY(r)}%`,
+                      background: oppTokenTheme.gradient,
+                      boxShadow: '0 3px 6px rgba(0,0,0,0.5), inset 0 2px 3px rgba(255,255,255,0.4), inset 0 -2px 3px rgba(0,0,0,0.3)',
+                      border: `1.5px solid ${oppTokenTheme.border}`,
+                    }}
                   >
                     {i + 1}
                   </motion.div>
@@ -1024,10 +1206,43 @@ const LudoKingGame = () => {
               })}
 
               {specialEffect && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none" style={{ background: specialEffect === 'capture' ? 'radial-gradient(circle, rgba(239,68,68,0.4) 0%, transparent 70%)' : specialEffect === 'home' ? 'radial-gradient(circle, rgba(34,197,94,0.4) 0%, transparent 70%)' : specialEffect === 'triple6' ? 'radial-gradient(circle, rgba(245,158,11,0.4) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(255,215,0,0.5) 0%, transparent 70%)' }}>
-                  <motion.div initial={{ scale: 0, rotate: -20 }} animate={{ scale: [0, 1.3, 1], rotate: [-20, 10, 0] }} transition={{ duration: 0.5, ease: 'easeOut' }} className="flex flex-col items-center gap-1">
-                    <span className="text-5xl drop-shadow-lg">{specialEffect === 'capture' ? '💥' : specialEffect === 'home' ? '🏠' : specialEffect === 'triple6' ? '🚫' : '🏆'}</span>
-                    <span className="text-white text-sm font-bold px-3 py-1 rounded-full drop-shadow-lg" style={{ background: specialEffect === 'capture' ? 'rgba(239,68,68,0.85)' : specialEffect === 'home' ? 'rgba(34,197,94,0.85)' : specialEffect === 'triple6' ? 'rgba(245,158,11,0.85)' : 'rgba(255,215,0,0.9)', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
+                  style={{
+                    background: specialEffect === 'capture'
+                      ? 'radial-gradient(circle, rgba(239,68,68,0.4) 0%, transparent 70%)'
+                      : specialEffect === 'home'
+                        ? 'radial-gradient(circle, rgba(34,197,94,0.4) 0%, transparent 70%)'
+                        : specialEffect === 'triple6'
+                          ? 'radial-gradient(circle, rgba(245,158,11,0.4) 0%, transparent 70%)'
+                          : 'radial-gradient(circle, rgba(255,215,0,0.5) 0%, transparent 70%)',
+                  }}
+                >
+                  <motion.div
+                    initial={{ scale: 0, rotate: -20 }}
+                    animate={{ scale: [0, 1.3, 1], rotate: [-20, 10, 0] }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="flex flex-col items-center gap-1"
+                  >
+                    <span className="text-5xl drop-shadow-lg">
+                      {specialEffect === 'capture' ? '💥' : specialEffect === 'home' ? '🏠' : specialEffect === 'triple6' ? '🚫' : '🏆'}
+                    </span>
+                    <span
+                      className="text-white text-sm font-bold px-3 py-1 rounded-full drop-shadow-lg"
+                      style={{
+                        background: specialEffect === 'capture'
+                          ? 'rgba(239,68,68,0.85)'
+                          : specialEffect === 'home'
+                            ? 'rgba(34,197,94,0.85)'
+                            : specialEffect === 'triple6'
+                              ? 'rgba(245,158,11,0.85)'
+                              : 'rgba(255,215,0,0.9)',
+                        textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+                      }}
+                    >
                       {specialEffect === 'capture' ? 'Captured!' : specialEffect === 'home' ? 'Home!' : specialEffect === 'triple6' ? 'Turn cancelled!' : 'You won!'}
                     </span>
                   </motion.div>
@@ -1041,6 +1256,7 @@ const LudoKingGame = () => {
               <div className={`${userDiceTheme.text} font-bold text-[10px]`}>{userTokenTheme.emoji} You</div>
               <div className="text-foreground text-xs">{blue.filter((t) => t === FINAL_HOME).length}/4</div>
             </div>
+
             <div className="flex items-center gap-2">
               {displayTurn === 'blue' && !rolled && !rolling && !aiPlaybackActive && (
                 <div className="flex flex-col items-center gap-0.5">
@@ -1048,14 +1264,22 @@ const LudoKingGame = () => {
                   <p className={`text-[10px] font-bold ${turnTimer <= 2 ? 'text-destructive animate-pulse' : 'text-primary'}`}>{turnTimer}s</p>
                 </div>
               )}
+
               {displayTurn === 'blue' && rolled && !rolling && !aiPlaybackActive && (
                 <div className="flex flex-col items-center gap-0.5">
                   <p className={`${userDiceTheme.text} text-[9px] font-bold animate-pulse`}>{userStatusText}</p>
                   <p className={`text-[10px] font-bold ${turnTimer <= 2 ? 'text-destructive animate-pulse' : 'text-primary'}`}>{turnTimer}s</p>
                 </div>
               )}
+
               <div className={`transition-all duration-500 ${displayTurn === 'blue' ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-75 translate-y-2 pointer-events-none'}`}>
-                <Dice3D value={dice} rolling={rolling && displayTurn === 'blue'} onClick={rollDice} disabled={displayTurn !== 'blue' || rolled || rolling || aiPlaybackActive || pendingActionRef.current} diceColor={userDiceColor} />
+                <Dice3D
+                  value={dice}
+                  rolling={rolling && displayTurn === 'blue'}
+                  onClick={rollDice}
+                  disabled={displayTurn !== 'blue' || rolled || rolling || aiPlaybackActive || pendingActionRef.current}
+                  diceColor={userDiceColor}
+                />
               </div>
             </div>
           </div>
@@ -1067,6 +1291,7 @@ const LudoKingGame = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
             <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-card border border-border rounded-2xl p-6 max-w-xs w-full mx-4" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-lg font-bold text-foreground mb-1">⚙️ Game Settings</h3>
+
               <p className="text-muted-foreground text-xs mb-2 mt-3">🎯 Your Token</p>
               <div className="grid grid-cols-2 gap-2">
                 {(Object.keys(TOKEN_PRESETS) as TokenColorKey[]).map((key) => {
@@ -1096,6 +1321,7 @@ const LudoKingGame = () => {
               </div>
 
               <div className="border-t border-border my-3" />
+
               <p className="text-muted-foreground text-xs mb-2">🎯 Opponent Token</p>
               <div className="grid grid-cols-2 gap-2">
                 {(Object.keys(TOKEN_PRESETS) as TokenColorKey[]).map((key) => {

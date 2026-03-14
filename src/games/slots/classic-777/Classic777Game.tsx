@@ -592,7 +592,7 @@ const Classic777Game = () => {
                 {/* Bottom row: AUTO SPIN | TURBO | BET | SPIN 777 — all in one row */}
                 <div className="flex items-center justify-between gap-2 px-2 pb-3">
                   <button onClick={() => setAutoSpin(!autoSpin)}
-                    className="px-2.5 py-2 rounded text-[10px] font-bold uppercase shrink-0"
+                    className="px-2.5 py-2 rounded text-[10px] font-bold uppercase shrink-0 whitespace-nowrap"
                     style={{
                       background: autoSpin ? 'linear-gradient(180deg, #c2410c, #9a3412)' : 'linear-gradient(180deg, #3d2817, #2a1810)',
                       border: '1px solid #d4a843',

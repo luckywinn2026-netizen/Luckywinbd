@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Minus, Volume2, VolumeX, RotateCcw, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, Coins, Volume2, VolumeX, RotateCcw, Zap } from 'lucide-react';
+import BetAmountModal from '@/components/BetAmountModal';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/contexts/WalletContext';
 import * as api from '@/lib/api';
@@ -34,6 +36,7 @@ const SPECIAL_SYMBOLS = [
   { id: 'free', label: 'FREE', type: 'scatter' as const, value: 0 },
 ];
 
+const FORTUNE_WHEEL_BET_PRESETS = [0.5, 1, 2, 5, 10, 20, 50, 100, 500, 1000];
 const getActiveReelCount = (bet: number): number => {
   if (bet >= 20) return 3;
   if (bet >= 10) return 2;
@@ -581,12 +584,12 @@ const FortuneWheelGame = () => {
 
   useEffect(() => { autoSpinRef.current = autoSpin; }, [autoSpin]);
 
+  const [showBetModal, setShowBetModal] = useState(false);
   const adjustBet = (dir: number) => {
     if (spinning || inFreeSpinMode) return;
-    const steps = [0.5, 1, 2, 5, 10, 20, 50, 100, 500, 1000];
-    const idx = steps.indexOf(betAmount);
-    const newIdx = Math.max(0, Math.min(steps.length - 1, idx + dir));
-    setBetAmount(steps[newIdx]);
+    const idx = FORTUNE_WHEEL_BET_PRESETS.indexOf(betAmount);
+    const newIdx = Math.max(0, Math.min(FORTUNE_WHEEL_BET_PRESETS.length - 1, idx + dir));
+    setBetAmount(FORTUNE_WHEEL_BET_PRESETS[newIdx]);
     if (soundEnabled) FortuneWheelSound.buttonClick();
   };
 
@@ -1126,20 +1129,27 @@ const FortuneWheelGame = () => {
         {/* Controls — Bet | Spin | Turbo | Auto */}
         <div className="relative z-10 p-3 pb-4">
           <div className="flex items-center justify-between gap-2">
-            {/* Bet — left */}
+            {/* Bet — left: coin icon + amount, click to open modal */}
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,215,0,0.5)' }}>Bet</span>
-              <button onClick={() => adjustBet(-1)} disabled={spinning || inFreeSpinMode}
-                className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30"
-                style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.25)' }}>
-                <Minus size={14} className="text-yellow-400" />
+              <button
+                type="button"
+                onClick={() => !(spinning || inFreeSpinMode) && setShowBetModal(true)}
+                disabled={spinning || inFreeSpinMode}
+                className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-lg active:scale-95 disabled:opacity-30"
+                style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.25)' }}
+              >
+                <Coins size={18} className="text-yellow-400" />
+                <span className="font-extrabold text-xl text-yellow-400 shrink-0">৳{betAmount}</span>
               </button>
-              <span className="font-extrabold text-xl min-w-[70px] text-center text-yellow-400 shrink-0">৳{betAmount}</span>
-              <button onClick={() => adjustBet(1)} disabled={spinning || inFreeSpinMode}
-                className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30"
-                style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.25)' }}>
-                <Plus size={14} className="text-yellow-400" />
-              </button>
+              <BetAmountModal
+                open={showBetModal}
+                onClose={() => setShowBetModal(false)}
+                presets={FORTUNE_WHEEL_BET_PRESETS}
+                current={betAmount}
+                onSelect={(v) => { setBetAmount(v); if (soundEnabled) FortuneWheelSound.buttonClick(); }}
+                accentColor="#ffd700"
+                disabled={spinning || inFreeSpinMode}
+              />
             </div>
             {/* Spin — center */}
             <button type="button" onClick={spin} disabled={spinning}
@@ -1168,7 +1178,7 @@ const FortuneWheelGame = () => {
               </button>
               <button
                 onClick={() => { setAutoSpin(!autoSpin); if (soundEnabled) FortuneWheelSound.buttonClick(); }}
-                className="px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider"
+                className="px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap"
                 style={{
                   background: autoSpin ? 'linear-gradient(135deg, #ff4444, #ffd700)' : 'rgba(255,255,255,0.05)',
                   border: autoSpin ? 'none' : '1px solid rgba(255,255,255,0.1)',

@@ -1,4 +1,6 @@
-import { Plus, Minus, RotateCcw, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Coins, RotateCcw, Zap } from 'lucide-react';
+import BetAmountModal from '@/components/BetAmountModal';
 
 interface SlotControlPanelProps {
   betAmount: number;
@@ -6,8 +8,8 @@ interface SlotControlPanelProps {
   autoSpin: boolean;
   turboMode?: boolean;
   onSpin: () => void;
-  onAdjustBet: (dir: number) => void;
-  onSetBet?: (amount: number) => void;
+  onAdjustBet?: (dir: number) => void;
+  onSetBet: (amount: number) => void;
   onToggleAuto: () => void;
   onToggleTurbo?: () => void;
   spinLabel?: string;
@@ -84,6 +86,8 @@ export default function SlotControlPanel({
 }: SlotControlPanelProps) {
   const t = getTheme(accentColor);
   const isDisabled = spinning || betDisabled;
+  const [showBetModal, setShowBetModal] = useState(false);
+  const accentHex = accentColor.startsWith('#') ? accentColor : `#${accentColor}`;
 
   return (
     <div className="relative z-10 px-3 pt-2 pb-6 safe-bottom">
@@ -117,39 +121,25 @@ export default function SlotControlPanel({
         <div className="p-3">
           {/* Single row: Bet | Spin (center) | Auto */}
           <div className="flex items-center justify-between gap-2">
-            {/* Bet controls — left */}
+            {/* Bet controls — left: coin icon + amount, click to open modal */}
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[9px] font-extrabold uppercase tracking-wider" style={{ color: t.btnColor, opacity: 0.7 }}>BET</span>
-              <button onClick={() => onAdjustBet(-1)} disabled={isDisabled}
-                className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30 shrink-0"
+              <button
+                type="button"
+                onClick={() => !isDisabled && setShowBetModal(true)}
+                disabled={isDisabled}
+                className="flex items-center gap-1.5 min-h-[36px] py-1.5 px-2.5 rounded-lg active:scale-95 disabled:opacity-30 shrink-0"
                 style={{
                   background: t.btnBg, border: `2px solid ${t.btnBorder}`,
                   boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.05)',
-                }}>
-                <Minus size={16} style={{ color: t.btnColor }} />
-              </button>
-
-              <div className="min-w-[70px] py-1.5 px-2 rounded-lg text-center shrink-0" style={{
-                background: 'linear-gradient(180deg, #0a0510 0%, #15102a 50%, #0a0510 100%)',
-                border: `2px solid ${t.frameBorder}`,
-                boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.05)',
-              }}>
-                <span className="font-black text-base" style={{
+                }}
+              >
+                <Coins size={18} style={{ color: t.btnColor }} />
+                <span className="font-black text-base min-w-[52px] text-left" style={{
                   color: t.btnColor,
                   filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))',
                 }}>৳{betAmount}</span>
-              </div>
-
-              <button onClick={() => onAdjustBet(1)} disabled={isDisabled}
-                className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30 shrink-0"
-                style={{
-                  background: t.btnBg, border: `2px solid ${t.btnBorder}`,
-                  boxShadow: '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.05)',
-                }}>
-                <Plus size={16} style={{ color: t.btnColor }} />
               </button>
             </div>
-
             {/* 3D SPIN Button — center */}
             <button onClick={onSpin} disabled={spinning}
               className="w-14 h-14 min-w-[56px] min-h-[56px] rounded-full font-black text-xs tracking-wider active:scale-[0.96] disabled:opacity-50 relative overflow-hidden flex items-center justify-center shrink-0"
@@ -179,7 +169,7 @@ export default function SlotControlPanel({
             {/* Turbo | Auto — right */}
             <div className="flex items-center gap-1 shrink-0">
               <button onClick={onToggleTurbo ?? (() => {})}
-                className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider active:scale-95"
+                className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider active:scale-95 whitespace-nowrap min-w-0"
                 style={{
                   background: turboMode ? `linear-gradient(180deg, ${t.btnColor}, ${t.frameOuter})` : t.btnBg,
                   border: `2px solid ${turboMode ? t.btnColor : t.frameOuter}`,
@@ -191,7 +181,7 @@ export default function SlotControlPanel({
                 <Zap size={10} className="inline mr-1" />TURBO
               </button>
               <button onClick={onToggleAuto}
-                className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider active:scale-95"
+                className="px-2.5 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider active:scale-95 whitespace-nowrap min-w-0"
                 style={{
                   background: autoSpin ? `linear-gradient(180deg, ${t.btnColor}, ${t.frameOuter})` : t.btnBg,
                   border: `2px solid ${autoSpin ? t.btnColor : t.frameOuter}`,
@@ -211,6 +201,15 @@ export default function SlotControlPanel({
           background: `linear-gradient(90deg, ${t.frameOuter}, ${t.frameBorder}, ${t.frameBorder}cc, ${t.frameBorder}, ${t.frameOuter})`,
         }} />
       </div>
+      <BetAmountModal
+        open={showBetModal}
+        onClose={() => setShowBetModal(false)}
+        presets={betPresets}
+        current={betAmount}
+        onSelect={onSetBet}
+        accentColor={accentHex}
+        disabled={isDisabled}
+      />
     </div>
   );
 }

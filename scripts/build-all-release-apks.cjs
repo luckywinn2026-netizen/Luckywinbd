@@ -42,7 +42,7 @@ const root = path.resolve(__dirname, '..');
 const androidDir = path.join(root, 'android');
 const distDir = path.join(root, 'dist', 'apk');
 const isWindows = process.platform === 'win32';
-const gradlew = isWindows ? 'gradlew.bat' : './gradlew';
+const gradlew = isWindows ? '.\\gradlew.bat' : './gradlew';
 const env = { ...process.env };
 if (javaHome) env.JAVA_HOME = javaHome;
 

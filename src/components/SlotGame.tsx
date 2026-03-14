@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Coins } from 'lucide-react';
+import BetAmountModal from '@/components/BetAmountModal';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/contexts/WalletContext';
 import * as api from '@/lib/api';
@@ -33,6 +34,8 @@ const SlotGame = ({ gameName, gameId, emoji, symbols, backPath = '/slots', thumb
   const [showCelebration, setShowCelebration] = useState(false);
   const [spinHistory, setSpinHistory] = useState<{ win: boolean; amount: number }[]>([]);
   const [showSplash, setShowSplash] = useState(true);
+  const [showBetModal, setShowBetModal] = useState(false);
+  const SLOT_BET_PRESETS = [0.5, 1, 2, 5, 10, 20, 50, 100, 500, 1000];
   const spinCountRef = useRef(0);
   const spinningRef = useRef(false);
   const handleLoadingComplete = useCallback(() => setShowSplash(false), []);
@@ -264,17 +267,27 @@ const SlotGame = ({ gameName, gameId, emoji, symbols, backPath = '/slots', thumb
 
         {/* ═══ Controls Panel ═══ */}
         <div className="px-3 pb-3 space-y-2">
-          {/* Bet input with metallic styling */}
+          {/* Bet: coin icon + amount, click to open modal */}
           <div className="flex items-center gap-2 rounded-xl p-2" style={{
             background: 'linear-gradient(180deg, hsl(216 65% 18%), hsl(216 72% 14%))',
             border: '1px solid hsl(43 96% 56% / 0.15)',
           }}>
-            <span className="text-xs text-muted-foreground font-heading px-1">BET</span>
-            <input
-              type="number"
-              value={stake}
-              onChange={e => setStake(e.target.value)}
-              className="flex-1 bg-secondary/50 rounded-lg px-3 py-2 text-foreground font-heading font-bold text-center outline-none focus:ring-1 focus:ring-primary text-sm"
+            <button
+              type="button"
+              onClick={() => !spinning && setShowBetModal(true)}
+              disabled={spinning}
+              className="flex items-center gap-2 flex-1 py-2 px-3 rounded-lg bg-secondary/50 font-heading font-bold text-foreground active:scale-[0.98] disabled:opacity-50"
+            >
+              <Coins size={20} className="text-primary" />
+              <span>৳{stake}</span>
+            </button>
+            <BetAmountModal
+              open={showBetModal}
+              onClose={() => setShowBetModal(false)}
+              presets={SLOT_BET_PRESETS}
+              current={Number(stake) || 50}
+              onSelect={(v) => setStake(String(v))}
+              accentColor="#eab308"
               disabled={spinning}
             />
           </div>
