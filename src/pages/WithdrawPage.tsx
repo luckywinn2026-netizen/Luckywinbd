@@ -26,6 +26,13 @@ const WithdrawPage = () => {
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [withdrawable, setWithdrawable] = useState<number | null>(null);
+  const [turnover, setTurnover] = useState<{
+    required_turnover: number;
+    completed_turnover: number;
+    remaining_turnover: number;
+    locked_amount: number;
+    has_pending: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,6 +52,7 @@ const WithdrawPage = () => {
 
   useEffect(() => {
     api.getWithdrawableBalance().then(setWithdrawable).catch(() => setWithdrawable(null));
+    api.getBonusTurnover().then(setTurnover).catch(() => setTurnover(null));
   }, [balance]);
 
   // Get the active rotated agent for the selected method.
@@ -111,6 +119,17 @@ const WithdrawPage = () => {
             <p className="text-xs text-amber-400 mt-1">
               Withdrawable: ৳{withdrawable.toLocaleString()} (complete bonus turnover to unlock more)
             </p>
+          )}
+          {turnover?.has_pending && turnover.required_turnover > 0 && (
+            <div className="mt-3 pt-3 border-t border-border text-left">
+              <p className="text-xs text-muted-foreground mb-1">Bonus Turnover Progress</p>
+              <p className="text-sm font-heading font-bold">
+                ৳{turnover.completed_turnover.toLocaleString()} / ৳{turnover.required_turnover.toLocaleString()} bet
+              </p>
+              <p className="text-[10px] text-amber-400 mt-0.5">
+                ৳{turnover.remaining_turnover.toLocaleString()} more to unlock ৳{turnover.locked_amount.toLocaleString()} bonus
+              </p>
+            </div>
           )}
         </div>
 

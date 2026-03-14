@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Wallet, ArrowDownCircle, ArrowUpCircle, History, Crown, Gift, MessageCircle, LogOut, User, LogIn, Users, Dices, Copy, BellOff } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/contexts/AuthContext';
+import * as api from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToastPreferences } from '@/contexts/ToastPreferencesContext';
 import { toast } from 'sonner';
@@ -18,6 +20,17 @@ const AccountPage = () => {
   const { user, profile, signOut, openAuth } = useAuth();
   const { t } = useLanguage();
   const { hideGameToasts, setHideGameToasts } = useToastPreferences();
+  const [turnover, setTurnover] = useState<{
+    required_turnover: number;
+    completed_turnover: number;
+    remaining_turnover: number;
+    locked_amount: number;
+    has_pending: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (user) api.getBonusTurnover().then(setTurnover).catch(() => setTurnover(null));
+  }, [user]);
 
   if (!user) {
     return (
@@ -103,6 +116,17 @@ const AccountPage = () => {
             <p className="font-heading font-bold text-sm text-primary">{vipPoints.toLocaleString()}</p>
           </div>
         </div>
+        {turnover?.has_pending && turnover.required_turnover > 0 && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <p className="text-[10px] text-muted-foreground mb-1">Bonus Turnover</p>
+            <p className="text-xs font-heading font-bold">
+              ৳{turnover.completed_turnover.toLocaleString()} / ৳{turnover.required_turnover.toLocaleString()} bet
+            </p>
+            <p className="text-[10px] text-amber-400 mt-0.5">
+              ৳{turnover.remaining_turnover.toLocaleString()} more to unlock ৳{turnover.locked_amount.toLocaleString()} bonus
+            </p>
+          </div>
+        )}
       </div>
       <div className="bg-card rounded-2xl p-4 gold-border card-glow mb-4">
         <div className="flex items-center justify-between gap-3">

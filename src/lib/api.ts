@@ -369,6 +369,30 @@ export async function getWithdrawableBalance(): Promise<number> {
   return Number(data ?? 0);
 }
 
+/** RPC: get user's bonus turnover progress (required, completed, remaining, locked_amount) */
+export async function getBonusTurnover(): Promise<{
+  required_turnover: number;
+  completed_turnover: number;
+  remaining_turnover: number;
+  locked_amount: number;
+  has_pending: boolean;
+}> {
+  const data = await rpc<{
+    required_turnover: number;
+    completed_turnover: number;
+    remaining_turnover: number;
+    locked_amount: number;
+    has_pending: boolean;
+  }>('get_user_bonus_turnover', {});
+  return {
+    required_turnover: Number(data?.required_turnover ?? 0),
+    completed_turnover: Number(data?.completed_turnover ?? 0),
+    remaining_turnover: Number(data?.remaining_turnover ?? 0),
+    locked_amount: Number(data?.locked_amount ?? 0),
+    has_pending: Boolean(data?.has_pending ?? false),
+  };
+}
+
 /** POST /api/payments/withdrawals */
 export async function createWithdrawal(body: { amount: number; method: string; phone: string; assigned_agent_id?: string }) {
   return request<{ success: boolean; id: string; withdrawal_code?: string; new_balance: number }>('/api/payments/withdrawals', {
