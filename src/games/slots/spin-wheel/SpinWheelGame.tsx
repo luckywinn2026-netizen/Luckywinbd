@@ -49,6 +49,18 @@ const outcomeToSegment = (outcome: string, maxWinAmount: number, betAmount: numb
   return 6;                             // 0.5x
 };
 
+const multiplierToSpinWheelSegment = (multiplier: number): number => {
+  if (multiplier <= 0) return Math.random() < 0.5 ? 1 : 4;
+  const exactIndices = SEGMENTS
+    .map((seg, i) => ({ seg, i }))
+    .filter(({ seg }) => seg.multiplier === multiplier)
+    .map(({ i }) => i);
+  if (exactIndices.length) {
+    return exactIndices[Math.floor(Math.random() * exactIndices.length)];
+  }
+  return outcomeToSegment(multiplier > 0 ? 'small_win' : 'loss', multiplier, 1);
+};
+
 const pickWeighted = (): number => {
   const total = SEGMENTS.reduce((s, seg) => s + seg.weight, 0);
   let r = Math.random() * total;
@@ -203,11 +215,12 @@ const SpinWheelGame = () => {
       return;
     }
 
-    const idx = outcomeToSegment(serverOutcome.outcome, serverOutcome.maxWinAmount, betAmount);
+    const serverMultiplier = Number((serverOutcome as { multiplier?: number }).multiplier ?? (betAmount > 0 ? serverOutcome.maxWinAmount / betAmount : 0));
+    const idx = multiplierToSpinWheelSegment(serverMultiplier);
     const seg = SEGMENTS[idx];
     // Use backend amount as authoritative — avoids mismatch
     const backendWin = (serverOutcome as { winAmount?: number }).winAmount ?? serverOutcome.maxWinAmount;
-    const actualWin = seg.multiplier > 0 ? (backendWin > 0 ? Math.round(backendWin) : Math.min(Math.round(betAmount * seg.multiplier), serverOutcome.maxWinAmount)) : 0;
+    const actualWin = backendWin > 0 ? Math.round(backendWin) : 0;
 
     const targetAngle = 360 - (idx * SEG_ANGLE + SEG_ANGLE / 2);
     const fullSpins = 5 + Math.floor(Math.random() * 4);

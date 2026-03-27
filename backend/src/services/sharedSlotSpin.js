@@ -2,6 +2,7 @@ const { supabaseAdmin } = require('./supabase');
 const { calculateOutcome, secureRandom } = require('./gameOutcome');
 
 const LUCKY_SPIN_MULTIPLIERS = [2, 5, 10, 12, 20];
+const SPIN_WHEEL_MULTIPLIERS = [0.5, 1.5, 2, 5, 10, 100];
 
 async function loadWalletBalance(userId) {
   const { data, error } = await supabaseAdmin
@@ -48,6 +49,52 @@ function applyLuckySpinMultiplier(result, betAmount) {
   };
 }
 
+function clampToMultiplierSet(result, betAmount, allowedMultipliers) {
+  if (!result || result.maxWinAmount <= 0) return { ...result, multiplier: 0 };
+
+  const affordable = allowedMultipliers
+    .filter((m) => m > 0 && betAmount * m <= result.maxWinAmount)
+    .sort((a, b) => a - b);
+
+  if (!affordable.length) {
+    return { ...result, outcome: 'loss', maxWinAmount: 0, multiplier: 0 };
+  }
+
+  const picked = affordable[affordable.length - 1];
+  return {
+    ...result,
+    multiplier: picked,
+    maxWinAmount: Math.round(betAmount * picked),
+  };
+}
+
+function clampToDigitMultiplierProduct(result, betAmount, multipliers, maxDigit) {
+  if (!result || result.maxWinAmount <= 0) return result;
+  let best = 0;
+  let bestMultiplier = 0;
+
+  for (const mult of multipliers) {
+    const digit = Math.floor(result.maxWinAmount / mult);
+    if (digit >= 1 && digit <= maxDigit) {
+      const value = digit * mult;
+      if (value <= result.maxWinAmount && value > best) {
+        best = value;
+        bestMultiplier = mult;
+      }
+    }
+  }
+
+  if (best <= 0) {
+    return { ...result, outcome: 'loss', maxWinAmount: 0, multiplier: 0 };
+  }
+
+  return {
+    ...result,
+    maxWinAmount: best,
+    multiplier: Math.round((best / betAmount) * 100) / 100 || bestMultiplier,
+  };
+}
+
 async function runSharedSlotSpin(userId, betAmount, gameId, gameName) {
   const bet = Number(betAmount);
   if (!Number.isFinite(bet) || bet <= 0) {
@@ -65,19 +112,29 @@ async function runSharedSlotSpin(userId, betAmount, gameId, gameName) {
     outcome = applyLuckySpinMultiplier(outcome, bet);
   }
 
+  // Spin Wheel: outcome must land on one of the exact wheel segment multipliers.
+  if (gameId === 'spin-wheel') {
+    if (outcome.outcome === 'loss' || outcome.maxWinAmount <= 0) {
+      outcome = { ...outcome, multiplier: 0, maxWinAmount: 0 };
+    } else {
+      outcome = clampToMultiplierSet(outcome, bet, SPIN_WHEEL_MULTIPLIERS);
+    }
+  }
+
   // Lucky 777: win must be displayable as digit × multiplier (matches frontend reel logic)
   if (gameId === 'lucky-777' && outcome.maxWinAmount > 0) {
     const mults = bet <= 5 ? [1, 2, 3, 5, 10, 25, 50] : [1, 2, 3, 5, 10, 25, 50, 100, 200, 500];
     const maxDigit = bet >= 5 ? 999 : 99;
-    let best = 0;
-    for (const mult of mults) {
-      const digit = Math.floor(outcome.maxWinAmount / mult);
-      if (digit >= 1 && digit <= maxDigit) {
-        const displayable = digit * mult;
-        if (displayable <= outcome.maxWinAmount && displayable > best) best = displayable;
-      }
-    }
-    if (best > 0) outcome = { ...outcome, maxWinAmount: best };
+    outcome = clampToDigitMultiplierProduct(outcome, bet, mults, maxDigit);
+  }
+
+  // Shared numeric slots: ensure backend win is exactly reachable by UI (digits × 4th-reel multiplier).
+  if (['money-coming', 'fortune-wheel', 'classic-casino', 'tropical-fruits', 'fruit-party'].includes(gameId) && outcome.maxWinAmount > 0) {
+    const maxDigit = bet >= 5 ? 999 : 99;
+    const allowedMults = bet <= 5
+      ? [1, 2, 3, 5, 10, 20, 25, 50]
+      : [1, 2, 3, 5, 10, 20, 25, 50, 100, 200, 500];
+    outcome = clampToDigitMultiplierProduct(outcome, bet, allowedMults, maxDigit);
   }
 
   // Fortune Gems: sync outcome tier to actual amount so UI shows correct gem count

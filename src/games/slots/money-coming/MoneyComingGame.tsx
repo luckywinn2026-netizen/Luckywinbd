@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
 import { ArrowLeft, Coins, Volume2, VolumeX, RotateCcw, Zap } from 'lucide-react';
 import BetAmountModal from '@/components/BetAmountModal';
 import { useNavigate } from 'react-router-dom';
